@@ -14,6 +14,8 @@ type Tx struct {
 	config
 	// Registry is the client for interacting with the Registry builders.
 	Registry *RegistryClient
+	// Repository is the client for interacting with the Repository builders.
+	Repository *RepositoryClient
 
 	// lazily loaded.
 	client     *Client
@@ -146,6 +148,7 @@ func (tx *Tx) Client() *Client {
 
 func (tx *Tx) init() {
 	tx.Registry = NewRegistryClient(tx.config)
+	tx.Repository = NewRepositoryClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

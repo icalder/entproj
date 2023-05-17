@@ -2,6 +2,7 @@ package schema
 
 import (
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
 )
@@ -21,5 +22,8 @@ func (Registry) Fields() []ent.Field {
 
 // Edges of the Registry.
 func (Registry) Edges() []ent.Edge {
-	return nil
+	// https://entgo.io/docs/schema-edges/
+	return []ent.Edge{
+		edge.To("repositories", Repository.Type),
+	}
 }

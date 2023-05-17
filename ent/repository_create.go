@@ -14,52 +14,42 @@ import (
 	"github.com/icalder/enttest/ent/repository"
 )
 
-// RegistryCreate is the builder for creating a Registry entity.
-type RegistryCreate struct {
+// RepositoryCreate is the builder for creating a Repository entity.
+type RepositoryCreate struct {
 	config
-	mutation *RegistryMutation
+	mutation *RepositoryMutation
 	hooks    []Hook
 }
 
 // SetName sets the "name" field.
-func (rc *RegistryCreate) SetName(s string) *RegistryCreate {
+func (rc *RepositoryCreate) SetName(s string) *RepositoryCreate {
 	rc.mutation.SetName(s)
 	return rc
 }
 
-// SetID sets the "id" field.
-func (rc *RegistryCreate) SetID(u uuid.UUID) *RegistryCreate {
-	rc.mutation.SetID(u)
+// SetRegistryID sets the "registry" edge to the Registry entity by ID.
+func (rc *RepositoryCreate) SetRegistryID(id uuid.UUID) *RepositoryCreate {
+	rc.mutation.SetRegistryID(id)
 	return rc
 }
 
-// AddRepositoryIDs adds the "repositories" edge to the Repository entity by IDs.
-func (rc *RegistryCreate) AddRepositoryIDs(ids ...int) *RegistryCreate {
-	rc.mutation.AddRepositoryIDs(ids...)
-	return rc
+// SetRegistry sets the "registry" edge to the Registry entity.
+func (rc *RepositoryCreate) SetRegistry(r *Registry) *RepositoryCreate {
+	return rc.SetRegistryID(r.ID)
 }
 
-// AddRepositories adds the "repositories" edges to the Repository entity.
-func (rc *RegistryCreate) AddRepositories(r ...*Repository) *RegistryCreate {
-	ids := make([]int, len(r))
-	for i := range r {
-		ids[i] = r[i].ID
-	}
-	return rc.AddRepositoryIDs(ids...)
-}
-
-// Mutation returns the RegistryMutation object of the builder.
-func (rc *RegistryCreate) Mutation() *RegistryMutation {
+// Mutation returns the RepositoryMutation object of the builder.
+func (rc *RepositoryCreate) Mutation() *RepositoryMutation {
 	return rc.mutation
 }
 
-// Save creates the Registry in the database.
-func (rc *RegistryCreate) Save(ctx context.Context) (*Registry, error) {
+// Save creates the Repository in the database.
+func (rc *RepositoryCreate) Save(ctx context.Context) (*Repository, error) {
 	return withHooks(ctx, rc.sqlSave, rc.mutation, rc.hooks)
 }
 
 // SaveX calls Save and panics if Save returns an error.
-func (rc *RegistryCreate) SaveX(ctx context.Context) *Registry {
+func (rc *RepositoryCreate) SaveX(ctx context.Context) *Repository {
 	v, err := rc.Save(ctx)
 	if err != nil {
 		panic(err)
@@ -68,32 +58,35 @@ func (rc *RegistryCreate) SaveX(ctx context.Context) *Registry {
 }
 
 // Exec executes the query.
-func (rc *RegistryCreate) Exec(ctx context.Context) error {
+func (rc *RepositoryCreate) Exec(ctx context.Context) error {
 	_, err := rc.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rc *RegistryCreate) ExecX(ctx context.Context) {
+func (rc *RepositoryCreate) ExecX(ctx context.Context) {
 	if err := rc.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
 
 // check runs all checks and user-defined validators on the builder.
-func (rc *RegistryCreate) check() error {
+func (rc *RepositoryCreate) check() error {
 	if _, ok := rc.mutation.Name(); !ok {
-		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Registry.name"`)}
+		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Repository.name"`)}
 	}
 	if v, ok := rc.mutation.Name(); ok {
-		if err := registry.NameValidator(v); err != nil {
-			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Registry.name": %w`, err)}
+		if err := repository.NameValidator(v); err != nil {
+			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Repository.name": %w`, err)}
 		}
+	}
+	if _, ok := rc.mutation.RegistryID(); !ok {
+		return &ValidationError{Name: "registry", err: errors.New(`ent: missing required edge "Repository.registry"`)}
 	}
 	return nil
 }
 
-func (rc *RegistryCreate) sqlSave(ctx context.Context) (*Registry, error) {
+func (rc *RepositoryCreate) sqlSave(ctx context.Context) (*Repository, error) {
 	if err := rc.check(); err != nil {
 		return nil, err
 	}
@@ -104,66 +97,58 @@ func (rc *RegistryCreate) sqlSave(ctx context.Context) (*Registry, error) {
 		}
 		return nil, err
 	}
-	if _spec.ID.Value != nil {
-		if id, ok := _spec.ID.Value.(*uuid.UUID); ok {
-			_node.ID = *id
-		} else if err := _node.ID.Scan(_spec.ID.Value); err != nil {
-			return nil, err
-		}
-	}
+	id := _spec.ID.Value.(int64)
+	_node.ID = int(id)
 	rc.mutation.id = &_node.ID
 	rc.mutation.done = true
 	return _node, nil
 }
 
-func (rc *RegistryCreate) createSpec() (*Registry, *sqlgraph.CreateSpec) {
+func (rc *RepositoryCreate) createSpec() (*Repository, *sqlgraph.CreateSpec) {
 	var (
-		_node = &Registry{config: rc.config}
-		_spec = sqlgraph.NewCreateSpec(registry.Table, sqlgraph.NewFieldSpec(registry.FieldID, field.TypeUUID))
+		_node = &Repository{config: rc.config}
+		_spec = sqlgraph.NewCreateSpec(repository.Table, sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt))
 	)
-	if id, ok := rc.mutation.ID(); ok {
-		_node.ID = id
-		_spec.ID.Value = &id
-	}
 	if value, ok := rc.mutation.Name(); ok {
-		_spec.SetField(registry.FieldName, field.TypeString, value)
+		_spec.SetField(repository.FieldName, field.TypeString, value)
 		_node.Name = value
 	}
-	if nodes := rc.mutation.RepositoriesIDs(); len(nodes) > 0 {
+	if nodes := rc.mutation.RegistryIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   registry.RepositoriesTable,
-			Columns: []string{registry.RepositoriesColumn},
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   repository.RegistryTable,
+			Columns: []string{repository.RegistryColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(registry.FieldID, field.TypeUUID),
 			},
 		}
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_node.registry_repositories = &nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }
 
-// RegistryCreateBulk is the builder for creating many Registry entities in bulk.
-type RegistryCreateBulk struct {
+// RepositoryCreateBulk is the builder for creating many Repository entities in bulk.
+type RepositoryCreateBulk struct {
 	config
-	builders []*RegistryCreate
+	builders []*RepositoryCreate
 }
 
-// Save creates the Registry entities in the database.
-func (rcb *RegistryCreateBulk) Save(ctx context.Context) ([]*Registry, error) {
+// Save creates the Repository entities in the database.
+func (rcb *RepositoryCreateBulk) Save(ctx context.Context) ([]*Repository, error) {
 	specs := make([]*sqlgraph.CreateSpec, len(rcb.builders))
-	nodes := make([]*Registry, len(rcb.builders))
+	nodes := make([]*Repository, len(rcb.builders))
 	mutators := make([]Mutator, len(rcb.builders))
 	for i := range rcb.builders {
 		func(i int, root context.Context) {
 			builder := rcb.builders[i]
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
-				mutation, ok := m.(*RegistryMutation)
+				mutation, ok := m.(*RepositoryMutation)
 				if !ok {
 					return nil, fmt.Errorf("unexpected mutation type %T", m)
 				}
@@ -188,6 +173,10 @@ func (rcb *RegistryCreateBulk) Save(ctx context.Context) ([]*Registry, error) {
 					return nil, err
 				}
 				mutation.id = &nodes[i].ID
+				if specs[i].ID.Value != nil {
+					id := specs[i].ID.Value.(int64)
+					nodes[i].ID = int(id)
+				}
 				mutation.done = true
 				return nodes[i], nil
 			})
@@ -206,7 +195,7 @@ func (rcb *RegistryCreateBulk) Save(ctx context.Context) ([]*Registry, error) {
 }
 
 // SaveX is like Save, but panics if an error occurs.
-func (rcb *RegistryCreateBulk) SaveX(ctx context.Context) []*Registry {
+func (rcb *RepositoryCreateBulk) SaveX(ctx context.Context) []*Repository {
 	v, err := rcb.Save(ctx)
 	if err != nil {
 		panic(err)
@@ -215,13 +204,13 @@ func (rcb *RegistryCreateBulk) SaveX(ctx context.Context) []*Registry {
 }
 
 // Exec executes the query.
-func (rcb *RegistryCreateBulk) Exec(ctx context.Context) error {
+func (rcb *RepositoryCreateBulk) Exec(ctx context.Context) error {
 	_, err := rcb.Save(ctx)
 	return err
 }
 
 // ExecX is like Exec, but panics if an error occurs.
-func (rcb *RegistryCreateBulk) ExecX(ctx context.Context) {
+func (rcb *RepositoryCreateBulk) ExecX(ctx context.Context) {
 	if err := rcb.Exec(ctx); err != nil {
 		panic(err)
 	}

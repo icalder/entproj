@@ -4,7 +4,6 @@ package ent
 
 import (
 	"context"
-	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -17,53 +16,54 @@ import (
 	"github.com/icalder/enttest/ent/repository"
 )
 
-// RegistryQuery is the builder for querying Registry entities.
-type RegistryQuery struct {
+// RepositoryQuery is the builder for querying Repository entities.
+type RepositoryQuery struct {
 	config
-	ctx              *QueryContext
-	order            []registry.OrderOption
-	inters           []Interceptor
-	predicates       []predicate.Registry
-	withRepositories *RepositoryQuery
+	ctx          *QueryContext
+	order        []repository.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.Repository
+	withRegistry *RegistryQuery
+	withFKs      bool
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
 }
 
-// Where adds a new predicate for the RegistryQuery builder.
-func (rq *RegistryQuery) Where(ps ...predicate.Registry) *RegistryQuery {
+// Where adds a new predicate for the RepositoryQuery builder.
+func (rq *RepositoryQuery) Where(ps ...predicate.Repository) *RepositoryQuery {
 	rq.predicates = append(rq.predicates, ps...)
 	return rq
 }
 
 // Limit the number of records to be returned by this query.
-func (rq *RegistryQuery) Limit(limit int) *RegistryQuery {
+func (rq *RepositoryQuery) Limit(limit int) *RepositoryQuery {
 	rq.ctx.Limit = &limit
 	return rq
 }
 
 // Offset to start from.
-func (rq *RegistryQuery) Offset(offset int) *RegistryQuery {
+func (rq *RepositoryQuery) Offset(offset int) *RepositoryQuery {
 	rq.ctx.Offset = &offset
 	return rq
 }
 
 // Unique configures the query builder to filter duplicate records on query.
 // By default, unique is set to true, and can be disabled using this method.
-func (rq *RegistryQuery) Unique(unique bool) *RegistryQuery {
+func (rq *RepositoryQuery) Unique(unique bool) *RepositoryQuery {
 	rq.ctx.Unique = &unique
 	return rq
 }
 
 // Order specifies how the records should be ordered.
-func (rq *RegistryQuery) Order(o ...registry.OrderOption) *RegistryQuery {
+func (rq *RepositoryQuery) Order(o ...repository.OrderOption) *RepositoryQuery {
 	rq.order = append(rq.order, o...)
 	return rq
 }
 
-// QueryRepositories chains the current query on the "repositories" edge.
-func (rq *RegistryQuery) QueryRepositories() *RepositoryQuery {
-	query := (&RepositoryClient{config: rq.config}).Query()
+// QueryRegistry chains the current query on the "registry" edge.
+func (rq *RepositoryQuery) QueryRegistry() *RegistryQuery {
+	query := (&RegistryClient{config: rq.config}).Query()
 	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
 		if err := rq.prepareQuery(ctx); err != nil {
 			return nil, err
@@ -73,9 +73,9 @@ func (rq *RegistryQuery) QueryRepositories() *RepositoryQuery {
 			return nil, err
 		}
 		step := sqlgraph.NewStep(
-			sqlgraph.From(registry.Table, registry.FieldID, selector),
-			sqlgraph.To(repository.Table, repository.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, registry.RepositoriesTable, registry.RepositoriesColumn),
+			sqlgraph.From(repository.Table, repository.FieldID, selector),
+			sqlgraph.To(registry.Table, registry.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, repository.RegistryTable, repository.RegistryColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(rq.driver.Dialect(), step)
 		return fromU, nil
@@ -83,21 +83,21 @@ func (rq *RegistryQuery) QueryRepositories() *RepositoryQuery {
 	return query
 }
 
-// First returns the first Registry entity from the query.
-// Returns a *NotFoundError when no Registry was found.
-func (rq *RegistryQuery) First(ctx context.Context) (*Registry, error) {
+// First returns the first Repository entity from the query.
+// Returns a *NotFoundError when no Repository was found.
+func (rq *RepositoryQuery) First(ctx context.Context) (*Repository, error) {
 	nodes, err := rq.Limit(1).All(setContextOp(ctx, rq.ctx, "First"))
 	if err != nil {
 		return nil, err
 	}
 	if len(nodes) == 0 {
-		return nil, &NotFoundError{registry.Label}
+		return nil, &NotFoundError{repository.Label}
 	}
 	return nodes[0], nil
 }
 
 // FirstX is like First, but panics if an error occurs.
-func (rq *RegistryQuery) FirstX(ctx context.Context) *Registry {
+func (rq *RepositoryQuery) FirstX(ctx context.Context) *Repository {
 	node, err := rq.First(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -105,22 +105,22 @@ func (rq *RegistryQuery) FirstX(ctx context.Context) *Registry {
 	return node
 }
 
-// FirstID returns the first Registry ID from the query.
-// Returns a *NotFoundError when no Registry ID was found.
-func (rq *RegistryQuery) FirstID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+// FirstID returns the first Repository ID from the query.
+// Returns a *NotFoundError when no Repository ID was found.
+func (rq *RepositoryQuery) FirstID(ctx context.Context) (id int, err error) {
+	var ids []int
 	if ids, err = rq.Limit(1).IDs(setContextOp(ctx, rq.ctx, "FirstID")); err != nil {
 		return
 	}
 	if len(ids) == 0 {
-		err = &NotFoundError{registry.Label}
+		err = &NotFoundError{repository.Label}
 		return
 	}
 	return ids[0], nil
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (rq *RegistryQuery) FirstIDX(ctx context.Context) uuid.UUID {
+func (rq *RepositoryQuery) FirstIDX(ctx context.Context) int {
 	id, err := rq.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -128,10 +128,10 @@ func (rq *RegistryQuery) FirstIDX(ctx context.Context) uuid.UUID {
 	return id
 }
 
-// Only returns a single Registry entity found by the query, ensuring it only returns one.
-// Returns a *NotSingularError when more than one Registry entity is found.
-// Returns a *NotFoundError when no Registry entities are found.
-func (rq *RegistryQuery) Only(ctx context.Context) (*Registry, error) {
+// Only returns a single Repository entity found by the query, ensuring it only returns one.
+// Returns a *NotSingularError when more than one Repository entity is found.
+// Returns a *NotFoundError when no Repository entities are found.
+func (rq *RepositoryQuery) Only(ctx context.Context) (*Repository, error) {
 	nodes, err := rq.Limit(2).All(setContextOp(ctx, rq.ctx, "Only"))
 	if err != nil {
 		return nil, err
@@ -140,14 +140,14 @@ func (rq *RegistryQuery) Only(ctx context.Context) (*Registry, error) {
 	case 1:
 		return nodes[0], nil
 	case 0:
-		return nil, &NotFoundError{registry.Label}
+		return nil, &NotFoundError{repository.Label}
 	default:
-		return nil, &NotSingularError{registry.Label}
+		return nil, &NotSingularError{repository.Label}
 	}
 }
 
 // OnlyX is like Only, but panics if an error occurs.
-func (rq *RegistryQuery) OnlyX(ctx context.Context) *Registry {
+func (rq *RepositoryQuery) OnlyX(ctx context.Context) *Repository {
 	node, err := rq.Only(ctx)
 	if err != nil {
 		panic(err)
@@ -155,11 +155,11 @@ func (rq *RegistryQuery) OnlyX(ctx context.Context) *Registry {
 	return node
 }
 
-// OnlyID is like Only, but returns the only Registry ID in the query.
-// Returns a *NotSingularError when more than one Registry ID is found.
+// OnlyID is like Only, but returns the only Repository ID in the query.
+// Returns a *NotSingularError when more than one Repository ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (rq *RegistryQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
-	var ids []uuid.UUID
+func (rq *RepositoryQuery) OnlyID(ctx context.Context) (id int, err error) {
+	var ids []int
 	if ids, err = rq.Limit(2).IDs(setContextOp(ctx, rq.ctx, "OnlyID")); err != nil {
 		return
 	}
@@ -167,15 +167,15 @@ func (rq *RegistryQuery) OnlyID(ctx context.Context) (id uuid.UUID, err error) {
 	case 1:
 		id = ids[0]
 	case 0:
-		err = &NotFoundError{registry.Label}
+		err = &NotFoundError{repository.Label}
 	default:
-		err = &NotSingularError{registry.Label}
+		err = &NotSingularError{repository.Label}
 	}
 	return
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (rq *RegistryQuery) OnlyIDX(ctx context.Context) uuid.UUID {
+func (rq *RepositoryQuery) OnlyIDX(ctx context.Context) int {
 	id, err := rq.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -183,18 +183,18 @@ func (rq *RegistryQuery) OnlyIDX(ctx context.Context) uuid.UUID {
 	return id
 }
 
-// All executes the query and returns a list of Registries.
-func (rq *RegistryQuery) All(ctx context.Context) ([]*Registry, error) {
+// All executes the query and returns a list of Repositories.
+func (rq *RepositoryQuery) All(ctx context.Context) ([]*Repository, error) {
 	ctx = setContextOp(ctx, rq.ctx, "All")
 	if err := rq.prepareQuery(ctx); err != nil {
 		return nil, err
 	}
-	qr := querierAll[[]*Registry, *RegistryQuery]()
-	return withInterceptors[[]*Registry](ctx, rq, qr, rq.inters)
+	qr := querierAll[[]*Repository, *RepositoryQuery]()
+	return withInterceptors[[]*Repository](ctx, rq, qr, rq.inters)
 }
 
 // AllX is like All, but panics if an error occurs.
-func (rq *RegistryQuery) AllX(ctx context.Context) []*Registry {
+func (rq *RepositoryQuery) AllX(ctx context.Context) []*Repository {
 	nodes, err := rq.All(ctx)
 	if err != nil {
 		panic(err)
@@ -202,20 +202,20 @@ func (rq *RegistryQuery) AllX(ctx context.Context) []*Registry {
 	return nodes
 }
 
-// IDs executes the query and returns a list of Registry IDs.
-func (rq *RegistryQuery) IDs(ctx context.Context) (ids []uuid.UUID, err error) {
+// IDs executes the query and returns a list of Repository IDs.
+func (rq *RepositoryQuery) IDs(ctx context.Context) (ids []int, err error) {
 	if rq.ctx.Unique == nil && rq.path != nil {
 		rq.Unique(true)
 	}
 	ctx = setContextOp(ctx, rq.ctx, "IDs")
-	if err = rq.Select(registry.FieldID).Scan(ctx, &ids); err != nil {
+	if err = rq.Select(repository.FieldID).Scan(ctx, &ids); err != nil {
 		return nil, err
 	}
 	return ids, nil
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (rq *RegistryQuery) IDsX(ctx context.Context) []uuid.UUID {
+func (rq *RepositoryQuery) IDsX(ctx context.Context) []int {
 	ids, err := rq.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -224,16 +224,16 @@ func (rq *RegistryQuery) IDsX(ctx context.Context) []uuid.UUID {
 }
 
 // Count returns the count of the given query.
-func (rq *RegistryQuery) Count(ctx context.Context) (int, error) {
+func (rq *RepositoryQuery) Count(ctx context.Context) (int, error) {
 	ctx = setContextOp(ctx, rq.ctx, "Count")
 	if err := rq.prepareQuery(ctx); err != nil {
 		return 0, err
 	}
-	return withInterceptors[int](ctx, rq, querierCount[*RegistryQuery](), rq.inters)
+	return withInterceptors[int](ctx, rq, querierCount[*RepositoryQuery](), rq.inters)
 }
 
 // CountX is like Count, but panics if an error occurs.
-func (rq *RegistryQuery) CountX(ctx context.Context) int {
+func (rq *RepositoryQuery) CountX(ctx context.Context) int {
 	count, err := rq.Count(ctx)
 	if err != nil {
 		panic(err)
@@ -242,7 +242,7 @@ func (rq *RegistryQuery) CountX(ctx context.Context) int {
 }
 
 // Exist returns true if the query has elements in the graph.
-func (rq *RegistryQuery) Exist(ctx context.Context) (bool, error) {
+func (rq *RepositoryQuery) Exist(ctx context.Context) (bool, error) {
 	ctx = setContextOp(ctx, rq.ctx, "Exist")
 	switch _, err := rq.FirstID(ctx); {
 	case IsNotFound(err):
@@ -255,7 +255,7 @@ func (rq *RegistryQuery) Exist(ctx context.Context) (bool, error) {
 }
 
 // ExistX is like Exist, but panics if an error occurs.
-func (rq *RegistryQuery) ExistX(ctx context.Context) bool {
+func (rq *RepositoryQuery) ExistX(ctx context.Context) bool {
 	exist, err := rq.Exist(ctx)
 	if err != nil {
 		panic(err)
@@ -263,33 +263,33 @@ func (rq *RegistryQuery) ExistX(ctx context.Context) bool {
 	return exist
 }
 
-// Clone returns a duplicate of the RegistryQuery builder, including all associated steps. It can be
+// Clone returns a duplicate of the RepositoryQuery builder, including all associated steps. It can be
 // used to prepare common query builders and use them differently after the clone is made.
-func (rq *RegistryQuery) Clone() *RegistryQuery {
+func (rq *RepositoryQuery) Clone() *RepositoryQuery {
 	if rq == nil {
 		return nil
 	}
-	return &RegistryQuery{
-		config:           rq.config,
-		ctx:              rq.ctx.Clone(),
-		order:            append([]registry.OrderOption{}, rq.order...),
-		inters:           append([]Interceptor{}, rq.inters...),
-		predicates:       append([]predicate.Registry{}, rq.predicates...),
-		withRepositories: rq.withRepositories.Clone(),
+	return &RepositoryQuery{
+		config:       rq.config,
+		ctx:          rq.ctx.Clone(),
+		order:        append([]repository.OrderOption{}, rq.order...),
+		inters:       append([]Interceptor{}, rq.inters...),
+		predicates:   append([]predicate.Repository{}, rq.predicates...),
+		withRegistry: rq.withRegistry.Clone(),
 		// clone intermediate query.
 		sql:  rq.sql.Clone(),
 		path: rq.path,
 	}
 }
 
-// WithRepositories tells the query-builder to eager-load the nodes that are connected to
-// the "repositories" edge. The optional arguments are used to configure the query builder of the edge.
-func (rq *RegistryQuery) WithRepositories(opts ...func(*RepositoryQuery)) *RegistryQuery {
-	query := (&RepositoryClient{config: rq.config}).Query()
+// WithRegistry tells the query-builder to eager-load the nodes that are connected to
+// the "registry" edge. The optional arguments are used to configure the query builder of the edge.
+func (rq *RepositoryQuery) WithRegistry(opts ...func(*RegistryQuery)) *RepositoryQuery {
+	query := (&RegistryClient{config: rq.config}).Query()
 	for _, opt := range opts {
 		opt(query)
 	}
-	rq.withRepositories = query
+	rq.withRegistry = query
 	return rq
 }
 
@@ -303,15 +303,15 @@ func (rq *RegistryQuery) WithRepositories(opts ...func(*RepositoryQuery)) *Regis
 //		Count int `json:"count,omitempty"`
 //	}
 //
-//	client.Registry.Query().
-//		GroupBy(registry.FieldName).
+//	client.Repository.Query().
+//		GroupBy(repository.FieldName).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
-func (rq *RegistryQuery) GroupBy(field string, fields ...string) *RegistryGroupBy {
+func (rq *RepositoryQuery) GroupBy(field string, fields ...string) *RepositoryGroupBy {
 	rq.ctx.Fields = append([]string{field}, fields...)
-	grbuild := &RegistryGroupBy{build: rq}
+	grbuild := &RepositoryGroupBy{build: rq}
 	grbuild.flds = &rq.ctx.Fields
-	grbuild.label = registry.Label
+	grbuild.label = repository.Label
 	grbuild.scan = grbuild.Scan
 	return grbuild
 }
@@ -325,23 +325,23 @@ func (rq *RegistryQuery) GroupBy(field string, fields ...string) *RegistryGroupB
 //		Name string `json:"name,omitempty"`
 //	}
 //
-//	client.Registry.Query().
-//		Select(registry.FieldName).
+//	client.Repository.Query().
+//		Select(repository.FieldName).
 //		Scan(ctx, &v)
-func (rq *RegistryQuery) Select(fields ...string) *RegistrySelect {
+func (rq *RepositoryQuery) Select(fields ...string) *RepositorySelect {
 	rq.ctx.Fields = append(rq.ctx.Fields, fields...)
-	sbuild := &RegistrySelect{RegistryQuery: rq}
-	sbuild.label = registry.Label
+	sbuild := &RepositorySelect{RepositoryQuery: rq}
+	sbuild.label = repository.Label
 	sbuild.flds, sbuild.scan = &rq.ctx.Fields, sbuild.Scan
 	return sbuild
 }
 
-// Aggregate returns a RegistrySelect configured with the given aggregations.
-func (rq *RegistryQuery) Aggregate(fns ...AggregateFunc) *RegistrySelect {
+// Aggregate returns a RepositorySelect configured with the given aggregations.
+func (rq *RepositoryQuery) Aggregate(fns ...AggregateFunc) *RepositorySelect {
 	return rq.Select().Aggregate(fns...)
 }
 
-func (rq *RegistryQuery) prepareQuery(ctx context.Context) error {
+func (rq *RepositoryQuery) prepareQuery(ctx context.Context) error {
 	for _, inter := range rq.inters {
 		if inter == nil {
 			return fmt.Errorf("ent: uninitialized interceptor (forgotten import ent/runtime?)")
@@ -353,7 +353,7 @@ func (rq *RegistryQuery) prepareQuery(ctx context.Context) error {
 		}
 	}
 	for _, f := range rq.ctx.Fields {
-		if !registry.ValidColumn(f) {
+		if !repository.ValidColumn(f) {
 			return &ValidationError{Name: f, err: fmt.Errorf("ent: invalid field %q for query", f)}
 		}
 	}
@@ -367,19 +367,26 @@ func (rq *RegistryQuery) prepareQuery(ctx context.Context) error {
 	return nil
 }
 
-func (rq *RegistryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Registry, error) {
+func (rq *RepositoryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Repository, error) {
 	var (
-		nodes       = []*Registry{}
+		nodes       = []*Repository{}
+		withFKs     = rq.withFKs
 		_spec       = rq.querySpec()
 		loadedTypes = [1]bool{
-			rq.withRepositories != nil,
+			rq.withRegistry != nil,
 		}
 	)
+	if rq.withRegistry != nil {
+		withFKs = true
+	}
+	if withFKs {
+		_spec.Node.Columns = append(_spec.Node.Columns, repository.ForeignKeys...)
+	}
 	_spec.ScanValues = func(columns []string) ([]any, error) {
-		return (*Registry).scanValues(nil, columns)
+		return (*Repository).scanValues(nil, columns)
 	}
 	_spec.Assign = func(columns []string, values []any) error {
-		node := &Registry{config: rq.config}
+		node := &Repository{config: rq.config}
 		nodes = append(nodes, node)
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
@@ -393,49 +400,49 @@ func (rq *RegistryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Reg
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
-	if query := rq.withRepositories; query != nil {
-		if err := rq.loadRepositories(ctx, query, nodes,
-			func(n *Registry) { n.Edges.Repositories = []*Repository{} },
-			func(n *Registry, e *Repository) { n.Edges.Repositories = append(n.Edges.Repositories, e) }); err != nil {
+	if query := rq.withRegistry; query != nil {
+		if err := rq.loadRegistry(ctx, query, nodes, nil,
+			func(n *Repository, e *Registry) { n.Edges.Registry = e }); err != nil {
 			return nil, err
 		}
 	}
 	return nodes, nil
 }
 
-func (rq *RegistryQuery) loadRepositories(ctx context.Context, query *RepositoryQuery, nodes []*Registry, init func(*Registry), assign func(*Registry, *Repository)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[uuid.UUID]*Registry)
+func (rq *RepositoryQuery) loadRegistry(ctx context.Context, query *RegistryQuery, nodes []*Repository, init func(*Repository), assign func(*Repository, *Registry)) error {
+	ids := make([]uuid.UUID, 0, len(nodes))
+	nodeids := make(map[uuid.UUID][]*Repository)
 	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
+		if nodes[i].registry_repositories == nil {
+			continue
 		}
+		fk := *nodes[i].registry_repositories
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
 	}
-	query.withFKs = true
-	query.Where(predicate.Repository(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(registry.RepositoriesColumn), fks...))
-	}))
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(registry.IDIn(ids...))
 	neighbors, err := query.All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, n := range neighbors {
-		fk := n.registry_repositories
-		if fk == nil {
-			return fmt.Errorf(`foreign-key "registry_repositories" is nil for node %v`, n.ID)
-		}
-		node, ok := nodeids[*fk]
+		nodes, ok := nodeids[n.ID]
 		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "registry_repositories" returned %v for node %v`, *fk, n.ID)
+			return fmt.Errorf(`unexpected foreign-key "registry_repositories" returned %v`, n.ID)
 		}
-		assign(node, n)
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
 	}
 	return nil
 }
 
-func (rq *RegistryQuery) sqlCount(ctx context.Context) (int, error) {
+func (rq *RepositoryQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := rq.querySpec()
 	_spec.Node.Columns = rq.ctx.Fields
 	if len(rq.ctx.Fields) > 0 {
@@ -444,8 +451,8 @@ func (rq *RegistryQuery) sqlCount(ctx context.Context) (int, error) {
 	return sqlgraph.CountNodes(ctx, rq.driver, _spec)
 }
 
-func (rq *RegistryQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(registry.Table, registry.Columns, sqlgraph.NewFieldSpec(registry.FieldID, field.TypeUUID))
+func (rq *RepositoryQuery) querySpec() *sqlgraph.QuerySpec {
+	_spec := sqlgraph.NewQuerySpec(repository.Table, repository.Columns, sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt))
 	_spec.From = rq.sql
 	if unique := rq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -454,9 +461,9 @@ func (rq *RegistryQuery) querySpec() *sqlgraph.QuerySpec {
 	}
 	if fields := rq.ctx.Fields; len(fields) > 0 {
 		_spec.Node.Columns = make([]string, 0, len(fields))
-		_spec.Node.Columns = append(_spec.Node.Columns, registry.FieldID)
+		_spec.Node.Columns = append(_spec.Node.Columns, repository.FieldID)
 		for i := range fields {
-			if fields[i] != registry.FieldID {
+			if fields[i] != repository.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
 		}
@@ -484,12 +491,12 @@ func (rq *RegistryQuery) querySpec() *sqlgraph.QuerySpec {
 	return _spec
 }
 
-func (rq *RegistryQuery) sqlQuery(ctx context.Context) *sql.Selector {
+func (rq *RepositoryQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	builder := sql.Dialect(rq.driver.Dialect())
-	t1 := builder.Table(registry.Table)
+	t1 := builder.Table(repository.Table)
 	columns := rq.ctx.Fields
 	if len(columns) == 0 {
-		columns = registry.Columns
+		columns = repository.Columns
 	}
 	selector := builder.Select(t1.Columns(columns...)...).From(t1)
 	if rq.sql != nil {
@@ -516,28 +523,28 @@ func (rq *RegistryQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	return selector
 }
 
-// RegistryGroupBy is the group-by builder for Registry entities.
-type RegistryGroupBy struct {
+// RepositoryGroupBy is the group-by builder for Repository entities.
+type RepositoryGroupBy struct {
 	selector
-	build *RegistryQuery
+	build *RepositoryQuery
 }
 
 // Aggregate adds the given aggregation functions to the group-by query.
-func (rgb *RegistryGroupBy) Aggregate(fns ...AggregateFunc) *RegistryGroupBy {
+func (rgb *RepositoryGroupBy) Aggregate(fns ...AggregateFunc) *RepositoryGroupBy {
 	rgb.fns = append(rgb.fns, fns...)
 	return rgb
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (rgb *RegistryGroupBy) Scan(ctx context.Context, v any) error {
+func (rgb *RepositoryGroupBy) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, rgb.build.ctx, "GroupBy")
 	if err := rgb.build.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*RegistryQuery, *RegistryGroupBy](ctx, rgb.build, rgb, rgb.build.inters, v)
+	return scanWithInterceptors[*RepositoryQuery, *RepositoryGroupBy](ctx, rgb.build, rgb, rgb.build.inters, v)
 }
 
-func (rgb *RegistryGroupBy) sqlScan(ctx context.Context, root *RegistryQuery, v any) error {
+func (rgb *RepositoryGroupBy) sqlScan(ctx context.Context, root *RepositoryQuery, v any) error {
 	selector := root.sqlQuery(ctx).Select()
 	aggregation := make([]string, 0, len(rgb.fns))
 	for _, fn := range rgb.fns {
@@ -564,28 +571,28 @@ func (rgb *RegistryGroupBy) sqlScan(ctx context.Context, root *RegistryQuery, v 
 	return sql.ScanSlice(rows, v)
 }
 
-// RegistrySelect is the builder for selecting fields of Registry entities.
-type RegistrySelect struct {
-	*RegistryQuery
+// RepositorySelect is the builder for selecting fields of Repository entities.
+type RepositorySelect struct {
+	*RepositoryQuery
 	selector
 }
 
 // Aggregate adds the given aggregation functions to the selector query.
-func (rs *RegistrySelect) Aggregate(fns ...AggregateFunc) *RegistrySelect {
+func (rs *RepositorySelect) Aggregate(fns ...AggregateFunc) *RepositorySelect {
 	rs.fns = append(rs.fns, fns...)
 	return rs
 }
 
 // Scan applies the selector query and scans the result into the given value.
-func (rs *RegistrySelect) Scan(ctx context.Context, v any) error {
+func (rs *RepositorySelect) Scan(ctx context.Context, v any) error {
 	ctx = setContextOp(ctx, rs.ctx, "Select")
 	if err := rs.prepareQuery(ctx); err != nil {
 		return err
 	}
-	return scanWithInterceptors[*RegistryQuery, *RegistrySelect](ctx, rs.RegistryQuery, rs, rs.inters, v)
+	return scanWithInterceptors[*RepositoryQuery, *RepositorySelect](ctx, rs.RepositoryQuery, rs, rs.inters, v)
 }
 
-func (rs *RegistrySelect) sqlScan(ctx context.Context, root *RegistryQuery, v any) error {
+func (rs *RepositorySelect) sqlScan(ctx context.Context, root *RepositoryQuery, v any) error {
 	selector := root.sqlQuery(ctx)
 	aggregation := make([]string, 0, len(rs.fns))
 	for _, fn := range rs.fns {

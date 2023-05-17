@@ -4,6 +4,7 @@ package registry
 
 import (
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -13,8 +14,17 @@ const (
 	FieldID = "id"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// EdgeRepositories holds the string denoting the repositories edge name in mutations.
+	EdgeRepositories = "repositories"
 	// Table holds the table name of the registry in the database.
 	Table = "registries"
+	// RepositoriesTable is the table that holds the repositories relation/edge.
+	RepositoriesTable = "repositories"
+	// RepositoriesInverseTable is the table name for the Repository entity.
+	// It exists in this package in order to avoid circular dependency with the "repository" package.
+	RepositoriesInverseTable = "repositories"
+	// RepositoriesColumn is the table column denoting the repositories relation/edge.
+	RepositoriesColumn = "registry_repositories"
 )
 
 // Columns holds all SQL columns for registry fields.
@@ -49,4 +59,25 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByRepositoriesCount orders the results by repositories count.
+func ByRepositoriesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newRepositoriesStep(), opts...)
+	}
+}
+
+// ByRepositories orders the results by repositories terms.
+func ByRepositories(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newRepositoriesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newRepositoriesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(RepositoriesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, RepositoriesTable, RepositoriesColumn),
+	)
 }
