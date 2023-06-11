@@ -7,13 +7,15 @@ import (
 	"fmt"
 	"math"
 
+	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
-	"github.com/icalder/enttest/ent/predicate"
-	"github.com/icalder/enttest/ent/registry"
-	"github.com/icalder/enttest/ent/repository"
+	"github.com/icalder/entproj/ent/predicate"
+	"github.com/icalder/entproj/ent/registry"
+	"github.com/icalder/entproj/ent/repository"
+	"github.com/rs/xid"
 )
 
 // RepositoryQuery is the builder for querying Repository entities.
@@ -25,6 +27,7 @@ type RepositoryQuery struct {
 	predicates   []predicate.Repository
 	withRegistry *RegistryQuery
 	withFKs      bool
+	modifiers    []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -107,8 +110,8 @@ func (rq *RepositoryQuery) FirstX(ctx context.Context) *Repository {
 
 // FirstID returns the first Repository ID from the query.
 // Returns a *NotFoundError when no Repository ID was found.
-func (rq *RepositoryQuery) FirstID(ctx context.Context) (id int, err error) {
-	var ids []int
+func (rq *RepositoryQuery) FirstID(ctx context.Context) (id xid.ID, err error) {
+	var ids []xid.ID
 	if ids, err = rq.Limit(1).IDs(setContextOp(ctx, rq.ctx, "FirstID")); err != nil {
 		return
 	}
@@ -120,7 +123,7 @@ func (rq *RepositoryQuery) FirstID(ctx context.Context) (id int, err error) {
 }
 
 // FirstIDX is like FirstID, but panics if an error occurs.
-func (rq *RepositoryQuery) FirstIDX(ctx context.Context) int {
+func (rq *RepositoryQuery) FirstIDX(ctx context.Context) xid.ID {
 	id, err := rq.FirstID(ctx)
 	if err != nil && !IsNotFound(err) {
 		panic(err)
@@ -158,8 +161,8 @@ func (rq *RepositoryQuery) OnlyX(ctx context.Context) *Repository {
 // OnlyID is like Only, but returns the only Repository ID in the query.
 // Returns a *NotSingularError when more than one Repository ID is found.
 // Returns a *NotFoundError when no entities are found.
-func (rq *RepositoryQuery) OnlyID(ctx context.Context) (id int, err error) {
-	var ids []int
+func (rq *RepositoryQuery) OnlyID(ctx context.Context) (id xid.ID, err error) {
+	var ids []xid.ID
 	if ids, err = rq.Limit(2).IDs(setContextOp(ctx, rq.ctx, "OnlyID")); err != nil {
 		return
 	}
@@ -175,7 +178,7 @@ func (rq *RepositoryQuery) OnlyID(ctx context.Context) (id int, err error) {
 }
 
 // OnlyIDX is like OnlyID, but panics if an error occurs.
-func (rq *RepositoryQuery) OnlyIDX(ctx context.Context) int {
+func (rq *RepositoryQuery) OnlyIDX(ctx context.Context) xid.ID {
 	id, err := rq.OnlyID(ctx)
 	if err != nil {
 		panic(err)
@@ -203,7 +206,7 @@ func (rq *RepositoryQuery) AllX(ctx context.Context) []*Repository {
 }
 
 // IDs executes the query and returns a list of Repository IDs.
-func (rq *RepositoryQuery) IDs(ctx context.Context) (ids []int, err error) {
+func (rq *RepositoryQuery) IDs(ctx context.Context) (ids []xid.ID, err error) {
 	if rq.ctx.Unique == nil && rq.path != nil {
 		rq.Unique(true)
 	}
@@ -215,7 +218,7 @@ func (rq *RepositoryQuery) IDs(ctx context.Context) (ids []int, err error) {
 }
 
 // IDsX is like IDs, but panics if an error occurs.
-func (rq *RepositoryQuery) IDsX(ctx context.Context) []int {
+func (rq *RepositoryQuery) IDsX(ctx context.Context) []xid.ID {
 	ids, err := rq.IDs(ctx)
 	if err != nil {
 		panic(err)
@@ -391,6 +394,9 @@ func (rq *RepositoryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*R
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
+	if len(rq.modifiers) > 0 {
+		_spec.Modifiers = rq.modifiers
+	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
@@ -444,6 +450,9 @@ func (rq *RepositoryQuery) loadRegistry(ctx context.Context, query *RegistryQuer
 
 func (rq *RepositoryQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := rq.querySpec()
+	if len(rq.modifiers) > 0 {
+		_spec.Modifiers = rq.modifiers
+	}
 	_spec.Node.Columns = rq.ctx.Fields
 	if len(rq.ctx.Fields) > 0 {
 		_spec.Unique = rq.ctx.Unique != nil && *rq.ctx.Unique
@@ -452,7 +461,7 @@ func (rq *RepositoryQuery) sqlCount(ctx context.Context) (int, error) {
 }
 
 func (rq *RepositoryQuery) querySpec() *sqlgraph.QuerySpec {
-	_spec := sqlgraph.NewQuerySpec(repository.Table, repository.Columns, sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt))
+	_spec := sqlgraph.NewQuerySpec(repository.Table, repository.Columns, sqlgraph.NewFieldSpec(repository.FieldID, field.TypeString))
 	_spec.From = rq.sql
 	if unique := rq.ctx.Unique; unique != nil {
 		_spec.Unique = *unique
@@ -506,6 +515,9 @@ func (rq *RepositoryQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	if rq.ctx.Unique != nil && *rq.ctx.Unique {
 		selector.Distinct()
 	}
+	for _, m := range rq.modifiers {
+		m(selector)
+	}
 	for _, p := range rq.predicates {
 		p(selector)
 	}
@@ -521,6 +533,38 @@ func (rq *RepositoryQuery) sqlQuery(ctx context.Context) *sql.Selector {
 		selector.Limit(*limit)
 	}
 	return selector
+}
+
+// ForUpdate locks the selected rows against concurrent updates, and prevent them from being
+// updated, deleted or "selected ... for update" by other sessions, until the transaction is
+// either committed or rolled-back.
+func (rq *RepositoryQuery) ForUpdate(opts ...sql.LockOption) *RepositoryQuery {
+	if rq.driver.Dialect() == dialect.Postgres {
+		rq.Unique(false)
+	}
+	rq.modifiers = append(rq.modifiers, func(s *sql.Selector) {
+		s.ForUpdate(opts...)
+	})
+	return rq
+}
+
+// ForShare behaves similarly to ForUpdate, except that it acquires a shared mode lock
+// on any rows that are read. Other sessions can read the rows, but cannot modify them
+// until your transaction commits.
+func (rq *RepositoryQuery) ForShare(opts ...sql.LockOption) *RepositoryQuery {
+	if rq.driver.Dialect() == dialect.Postgres {
+		rq.Unique(false)
+	}
+	rq.modifiers = append(rq.modifiers, func(s *sql.Selector) {
+		s.ForShare(opts...)
+	})
+	return rq
+}
+
+// Modify adds a query modifier for attaching custom logic to queries.
+func (rq *RepositoryQuery) Modify(modifiers ...func(s *sql.Selector)) *RepositorySelect {
+	rq.modifiers = append(rq.modifiers, modifiers...)
+	return rq.Select()
 }
 
 // RepositoryGroupBy is the group-by builder for Repository entities.
@@ -611,4 +655,10 @@ func (rs *RepositorySelect) sqlScan(ctx context.Context, root *RepositoryQuery, 
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
+}
+
+// Modify adds a query modifier for attaching custom logic to queries.
+func (rs *RepositorySelect) Modify(modifiers ...func(s *sql.Selector)) *RepositorySelect {
+	rs.modifiers = append(rs.modifiers, modifiers...)
+	return rs
 }

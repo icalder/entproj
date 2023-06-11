@@ -9,14 +9,15 @@ import (
 	"log"
 
 	"github.com/google/uuid"
-	"github.com/icalder/enttest/ent/migrate"
+	"github.com/icalder/entproj/ent/migrate"
+	"github.com/rs/xid"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
-	"github.com/icalder/enttest/ent/registry"
-	"github.com/icalder/enttest/ent/repository"
+	"github.com/icalder/entproj/ent/registry"
+	"github.com/icalder/entproj/ent/repository"
 )
 
 // Client is the client that holds all ent builders.
@@ -379,7 +380,7 @@ func (c *RepositoryClient) UpdateOne(r *Repository) *RepositoryUpdateOne {
 }
 
 // UpdateOneID returns an update builder for the given id.
-func (c *RepositoryClient) UpdateOneID(id int) *RepositoryUpdateOne {
+func (c *RepositoryClient) UpdateOneID(id xid.ID) *RepositoryUpdateOne {
 	mutation := newRepositoryMutation(c.config, OpUpdateOne, withRepositoryID(id))
 	return &RepositoryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
 }
@@ -396,7 +397,7 @@ func (c *RepositoryClient) DeleteOne(r *Repository) *RepositoryDeleteOne {
 }
 
 // DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *RepositoryClient) DeleteOneID(id int) *RepositoryDeleteOne {
+func (c *RepositoryClient) DeleteOneID(id xid.ID) *RepositoryDeleteOne {
 	builder := c.Delete().Where(repository.ID(id))
 	builder.mutation.id = &id
 	builder.mutation.op = OpDeleteOne
@@ -413,12 +414,12 @@ func (c *RepositoryClient) Query() *RepositoryQuery {
 }
 
 // Get returns a Repository entity by its id.
-func (c *RepositoryClient) Get(ctx context.Context, id int) (*Repository, error) {
+func (c *RepositoryClient) Get(ctx context.Context, id xid.ID) (*Repository, error) {
 	return c.Query().Where(repository.ID(id)).Only(ctx)
 }
 
 // GetX is like Get, but panics if an error occurs.
-func (c *RepositoryClient) GetX(ctx context.Context, id int) *Repository {
+func (c *RepositoryClient) GetX(ctx context.Context, id xid.ID) *Repository {
 	obj, err := c.Get(ctx, id)
 	if err != nil {
 		panic(err)

@@ -11,9 +11,10 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
-	"github.com/icalder/enttest/ent/predicate"
-	"github.com/icalder/enttest/ent/registry"
-	"github.com/icalder/enttest/ent/repository"
+	"github.com/icalder/entproj/ent/predicate"
+	"github.com/icalder/entproj/ent/registry"
+	"github.com/icalder/entproj/ent/repository"
+	"github.com/rs/xid"
 )
 
 const (
@@ -37,8 +38,8 @@ type RegistryMutation struct {
 	id                  *uuid.UUID
 	name                *string
 	clearedFields       map[string]struct{}
-	repositories        map[int]struct{}
-	removedrepositories map[int]struct{}
+	repositories        map[xid.ID]struct{}
+	removedrepositories map[xid.ID]struct{}
 	clearedrepositories bool
 	done                bool
 	oldValue            func(context.Context) (*Registry, error)
@@ -186,9 +187,9 @@ func (m *RegistryMutation) ResetName() {
 }
 
 // AddRepositoryIDs adds the "repositories" edge to the Repository entity by ids.
-func (m *RegistryMutation) AddRepositoryIDs(ids ...int) {
+func (m *RegistryMutation) AddRepositoryIDs(ids ...xid.ID) {
 	if m.repositories == nil {
-		m.repositories = make(map[int]struct{})
+		m.repositories = make(map[xid.ID]struct{})
 	}
 	for i := range ids {
 		m.repositories[ids[i]] = struct{}{}
@@ -206,9 +207,9 @@ func (m *RegistryMutation) RepositoriesCleared() bool {
 }
 
 // RemoveRepositoryIDs removes the "repositories" edge to the Repository entity by IDs.
-func (m *RegistryMutation) RemoveRepositoryIDs(ids ...int) {
+func (m *RegistryMutation) RemoveRepositoryIDs(ids ...xid.ID) {
 	if m.removedrepositories == nil {
-		m.removedrepositories = make(map[int]struct{})
+		m.removedrepositories = make(map[xid.ID]struct{})
 	}
 	for i := range ids {
 		delete(m.repositories, ids[i])
@@ -217,7 +218,7 @@ func (m *RegistryMutation) RemoveRepositoryIDs(ids ...int) {
 }
 
 // RemovedRepositories returns the removed IDs of the "repositories" edge to the Repository entity.
-func (m *RegistryMutation) RemovedRepositoriesIDs() (ids []int) {
+func (m *RegistryMutation) RemovedRepositoriesIDs() (ids []xid.ID) {
 	for id := range m.removedrepositories {
 		ids = append(ids, id)
 	}
@@ -225,7 +226,7 @@ func (m *RegistryMutation) RemovedRepositoriesIDs() (ids []int) {
 }
 
 // RepositoriesIDs returns the "repositories" edge IDs in the mutation.
-func (m *RegistryMutation) RepositoriesIDs() (ids []int) {
+func (m *RegistryMutation) RepositoriesIDs() (ids []xid.ID) {
 	for id := range m.repositories {
 		ids = append(ids, id)
 	}
@@ -459,7 +460,7 @@ type RepositoryMutation struct {
 	config
 	op              Op
 	typ             string
-	id              *int
+	id              *xid.ID
 	name            *string
 	clearedFields   map[string]struct{}
 	registry        *uuid.UUID
@@ -489,7 +490,7 @@ func newRepositoryMutation(c config, op Op, opts ...repositoryOption) *Repositor
 }
 
 // withRepositoryID sets the ID field of the mutation.
-func withRepositoryID(id int) repositoryOption {
+func withRepositoryID(id xid.ID) repositoryOption {
 	return func(m *RepositoryMutation) {
 		var (
 			err   error
@@ -539,9 +540,15 @@ func (m RepositoryMutation) Tx() (*Tx, error) {
 	return tx, nil
 }
 
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Repository entities.
+func (m *RepositoryMutation) SetID(id xid.ID) {
+	m.id = &id
+}
+
 // ID returns the ID value in the mutation. Note that the ID is only available
 // if it was provided to the builder or after it was returned from the database.
-func (m *RepositoryMutation) ID() (id int, exists bool) {
+func (m *RepositoryMutation) ID() (id xid.ID, exists bool) {
 	if m.id == nil {
 		return
 	}
@@ -552,12 +559,12 @@ func (m *RepositoryMutation) ID() (id int, exists bool) {
 // That means, if the mutation is applied within a transaction with an isolation level such
 // as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
 // or updated by the mutation.
-func (m *RepositoryMutation) IDs(ctx context.Context) ([]int, error) {
+func (m *RepositoryMutation) IDs(ctx context.Context) ([]xid.ID, error) {
 	switch {
 	case m.op.Is(OpUpdateOne | OpDeleteOne):
 		id, exists := m.ID()
 		if exists {
-			return []int{id}, nil
+			return []xid.ID{id}, nil
 		}
 		fallthrough
 	case m.op.Is(OpUpdate | OpDelete):

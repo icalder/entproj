@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/icalder/enttest/ent/predicate"
-	"github.com/icalder/enttest/ent/repository"
+	"github.com/icalder/entproj/ent/predicate"
+	"github.com/icalder/entproj/ent/repository"
 )
 
 // RepositoryDelete is the builder for deleting a Repository entity.
@@ -40,7 +40,7 @@ func (rd *RepositoryDelete) ExecX(ctx context.Context) int {
 }
 
 func (rd *RepositoryDelete) sqlExec(ctx context.Context) (int, error) {
-	_spec := sqlgraph.NewDeleteSpec(repository.Table, sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt))
+	_spec := sqlgraph.NewDeleteSpec(repository.Table, sqlgraph.NewFieldSpec(repository.FieldID, field.TypeString))
 	if ps := rd.mutation.predicates; len(ps) > 0 {
 		_spec.Predicate = func(selector *sql.Selector) {
 			for i := range ps {

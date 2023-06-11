@@ -9,7 +9,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
-	"github.com/icalder/enttest/ent/registry"
+	"github.com/icalder/entproj/ent/registry"
 )
 
 // Registry is the model entity for the Registry schema.

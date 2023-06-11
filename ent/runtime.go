@@ -3,9 +3,10 @@
 package ent
 
 import (
-	"github.com/icalder/enttest/ent/registry"
-	"github.com/icalder/enttest/ent/repository"
-	"github.com/icalder/enttest/ent/schema"
+	"github.com/icalder/entproj/ent/registry"
+	"github.com/icalder/entproj/ent/repository"
+	"github.com/icalder/entproj/ent/schema"
+	"github.com/rs/xid"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -18,10 +19,17 @@ func init() {
 	registryDescName := registryFields[1].Descriptor()
 	// registry.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	registry.NameValidator = registryDescName.Validators[0].(func(string) error)
+	repositoryMixin := schema.Repository{}.Mixin()
+	repositoryMixinFields0 := repositoryMixin[0].Fields()
+	_ = repositoryMixinFields0
 	repositoryFields := schema.Repository{}.Fields()
 	_ = repositoryFields
 	// repositoryDescName is the schema descriptor for name field.
 	repositoryDescName := repositoryFields[0].Descriptor()
 	// repository.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	repository.NameValidator = repositoryDescName.Validators[0].(func(string) error)
+	// repositoryDescID is the schema descriptor for id field.
+	repositoryDescID := repositoryMixinFields0[0].Descriptor()
+	// repository.DefaultID holds the default value on creation for the id field.
+	repository.DefaultID = repositoryDescID.Default.(func() xid.ID)
 }

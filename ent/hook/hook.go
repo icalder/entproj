@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/icalder/enttest/ent"
+	"github.com/icalder/entproj/ent"
 )
 
 // The RegistryFunc type is an adapter to allow the use of ordinary

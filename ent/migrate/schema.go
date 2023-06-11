@@ -21,7 +21,7 @@ var (
 	}
 	// RepositoriesColumns holds the columns for the "repositories" table.
 	RepositoriesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "id", Type: field.TypeString},
 		{Name: "name", Type: field.TypeString, Size: 2147483647},
 		{Name: "registry_repositories", Type: field.TypeUUID},
 	}
@@ -36,6 +36,13 @@ var (
 				Columns:    []*schema.Column{RepositoriesColumns[2]},
 				RefColumns: []*schema.Column{RegistriesColumns[0]},
 				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "repository_name_registry_repositories",
+				Unique:  true,
+				Columns: []*schema.Column{RepositoriesColumns[1], RepositoriesColumns[2]},
 			},
 		},
 	}

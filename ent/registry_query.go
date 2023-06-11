@@ -8,13 +8,14 @@ import (
 	"fmt"
 	"math"
 
+	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
-	"github.com/icalder/enttest/ent/predicate"
-	"github.com/icalder/enttest/ent/registry"
-	"github.com/icalder/enttest/ent/repository"
+	"github.com/icalder/entproj/ent/predicate"
+	"github.com/icalder/entproj/ent/registry"
+	"github.com/icalder/entproj/ent/repository"
 )
 
 // RegistryQuery is the builder for querying Registry entities.
@@ -25,6 +26,7 @@ type RegistryQuery struct {
 	inters           []Interceptor
 	predicates       []predicate.Registry
 	withRepositories *RepositoryQuery
+	modifiers        []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -384,6 +386,9 @@ func (rq *RegistryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Reg
 		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
+	if len(rq.modifiers) > 0 {
+		_spec.Modifiers = rq.modifiers
+	}
 	for i := range hooks {
 		hooks[i](ctx, _spec)
 	}
@@ -437,6 +442,9 @@ func (rq *RegistryQuery) loadRepositories(ctx context.Context, query *Repository
 
 func (rq *RegistryQuery) sqlCount(ctx context.Context) (int, error) {
 	_spec := rq.querySpec()
+	if len(rq.modifiers) > 0 {
+		_spec.Modifiers = rq.modifiers
+	}
 	_spec.Node.Columns = rq.ctx.Fields
 	if len(rq.ctx.Fields) > 0 {
 		_spec.Unique = rq.ctx.Unique != nil && *rq.ctx.Unique
@@ -499,6 +507,9 @@ func (rq *RegistryQuery) sqlQuery(ctx context.Context) *sql.Selector {
 	if rq.ctx.Unique != nil && *rq.ctx.Unique {
 		selector.Distinct()
 	}
+	for _, m := range rq.modifiers {
+		m(selector)
+	}
 	for _, p := range rq.predicates {
 		p(selector)
 	}
@@ -514,6 +525,38 @@ func (rq *RegistryQuery) sqlQuery(ctx context.Context) *sql.Selector {
 		selector.Limit(*limit)
 	}
 	return selector
+}
+
+// ForUpdate locks the selected rows against concurrent updates, and prevent them from being
+// updated, deleted or "selected ... for update" by other sessions, until the transaction is
+// either committed or rolled-back.
+func (rq *RegistryQuery) ForUpdate(opts ...sql.LockOption) *RegistryQuery {
+	if rq.driver.Dialect() == dialect.Postgres {
+		rq.Unique(false)
+	}
+	rq.modifiers = append(rq.modifiers, func(s *sql.Selector) {
+		s.ForUpdate(opts...)
+	})
+	return rq
+}
+
+// ForShare behaves similarly to ForUpdate, except that it acquires a shared mode lock
+// on any rows that are read. Other sessions can read the rows, but cannot modify them
+// until your transaction commits.
+func (rq *RegistryQuery) ForShare(opts ...sql.LockOption) *RegistryQuery {
+	if rq.driver.Dialect() == dialect.Postgres {
+		rq.Unique(false)
+	}
+	rq.modifiers = append(rq.modifiers, func(s *sql.Selector) {
+		s.ForShare(opts...)
+	})
+	return rq
+}
+
+// Modify adds a query modifier for attaching custom logic to queries.
+func (rq *RegistryQuery) Modify(modifiers ...func(s *sql.Selector)) *RegistrySelect {
+	rq.modifiers = append(rq.modifiers, modifiers...)
+	return rq.Select()
 }
 
 // RegistryGroupBy is the group-by builder for Registry entities.
@@ -604,4 +647,10 @@ func (rs *RegistrySelect) sqlScan(ctx context.Context, root *RegistryQuery, v an
 	}
 	defer rows.Close()
 	return sql.ScanSlice(rows, v)
+}
+
+// Modify adds a query modifier for attaching custom logic to queries.
+func (rs *RegistrySelect) Modify(modifiers ...func(s *sql.Selector)) *RegistrySelect {
+	rs.modifiers = append(rs.modifiers, modifiers...)
+	return rs
 }

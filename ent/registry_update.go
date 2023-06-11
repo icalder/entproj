@@ -10,16 +10,18 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/icalder/enttest/ent/predicate"
-	"github.com/icalder/enttest/ent/registry"
-	"github.com/icalder/enttest/ent/repository"
+	"github.com/icalder/entproj/ent/predicate"
+	"github.com/icalder/entproj/ent/registry"
+	"github.com/icalder/entproj/ent/repository"
+	"github.com/rs/xid"
 )
 
 // RegistryUpdate is the builder for updating Registry entities.
 type RegistryUpdate struct {
 	config
-	hooks    []Hook
-	mutation *RegistryMutation
+	hooks     []Hook
+	mutation  *RegistryMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // Where appends a list predicates to the RegistryUpdate builder.
@@ -35,14 +37,14 @@ func (ru *RegistryUpdate) SetName(s string) *RegistryUpdate {
 }
 
 // AddRepositoryIDs adds the "repositories" edge to the Repository entity by IDs.
-func (ru *RegistryUpdate) AddRepositoryIDs(ids ...int) *RegistryUpdate {
+func (ru *RegistryUpdate) AddRepositoryIDs(ids ...xid.ID) *RegistryUpdate {
 	ru.mutation.AddRepositoryIDs(ids...)
 	return ru
 }
 
 // AddRepositories adds the "repositories" edges to the Repository entity.
 func (ru *RegistryUpdate) AddRepositories(r ...*Repository) *RegistryUpdate {
-	ids := make([]int, len(r))
+	ids := make([]xid.ID, len(r))
 	for i := range r {
 		ids[i] = r[i].ID
 	}
@@ -61,14 +63,14 @@ func (ru *RegistryUpdate) ClearRepositories() *RegistryUpdate {
 }
 
 // RemoveRepositoryIDs removes the "repositories" edge to Repository entities by IDs.
-func (ru *RegistryUpdate) RemoveRepositoryIDs(ids ...int) *RegistryUpdate {
+func (ru *RegistryUpdate) RemoveRepositoryIDs(ids ...xid.ID) *RegistryUpdate {
 	ru.mutation.RemoveRepositoryIDs(ids...)
 	return ru
 }
 
 // RemoveRepositories removes "repositories" edges to Repository entities.
 func (ru *RegistryUpdate) RemoveRepositories(r ...*Repository) *RegistryUpdate {
-	ids := make([]int, len(r))
+	ids := make([]xid.ID, len(r))
 	for i := range r {
 		ids[i] = r[i].ID
 	}
@@ -112,6 +114,12 @@ func (ru *RegistryUpdate) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (ru *RegistryUpdate) Modify(modifiers ...func(u *sql.UpdateBuilder)) *RegistryUpdate {
+	ru.modifiers = append(ru.modifiers, modifiers...)
+	return ru
+}
+
 func (ru *RegistryUpdate) sqlSave(ctx context.Context) (n int, err error) {
 	if err := ru.check(); err != nil {
 		return n, err
@@ -135,7 +143,7 @@ func (ru *RegistryUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{registry.RepositoriesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -148,7 +156,7 @@ func (ru *RegistryUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{registry.RepositoriesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -164,7 +172,7 @@ func (ru *RegistryUpdate) sqlSave(ctx context.Context) (n int, err error) {
 			Columns: []string{registry.RepositoriesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -172,6 +180,7 @@ func (ru *RegistryUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	_spec.AddModifiers(ru.modifiers...)
 	if n, err = sqlgraph.UpdateNodes(ctx, ru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{registry.Label}
@@ -187,9 +196,10 @@ func (ru *RegistryUpdate) sqlSave(ctx context.Context) (n int, err error) {
 // RegistryUpdateOne is the builder for updating a single Registry entity.
 type RegistryUpdateOne struct {
 	config
-	fields   []string
-	hooks    []Hook
-	mutation *RegistryMutation
+	fields    []string
+	hooks     []Hook
+	mutation  *RegistryMutation
+	modifiers []func(*sql.UpdateBuilder)
 }
 
 // SetName sets the "name" field.
@@ -199,14 +209,14 @@ func (ruo *RegistryUpdateOne) SetName(s string) *RegistryUpdateOne {
 }
 
 // AddRepositoryIDs adds the "repositories" edge to the Repository entity by IDs.
-func (ruo *RegistryUpdateOne) AddRepositoryIDs(ids ...int) *RegistryUpdateOne {
+func (ruo *RegistryUpdateOne) AddRepositoryIDs(ids ...xid.ID) *RegistryUpdateOne {
 	ruo.mutation.AddRepositoryIDs(ids...)
 	return ruo
 }
 
 // AddRepositories adds the "repositories" edges to the Repository entity.
 func (ruo *RegistryUpdateOne) AddRepositories(r ...*Repository) *RegistryUpdateOne {
-	ids := make([]int, len(r))
+	ids := make([]xid.ID, len(r))
 	for i := range r {
 		ids[i] = r[i].ID
 	}
@@ -225,14 +235,14 @@ func (ruo *RegistryUpdateOne) ClearRepositories() *RegistryUpdateOne {
 }
 
 // RemoveRepositoryIDs removes the "repositories" edge to Repository entities by IDs.
-func (ruo *RegistryUpdateOne) RemoveRepositoryIDs(ids ...int) *RegistryUpdateOne {
+func (ruo *RegistryUpdateOne) RemoveRepositoryIDs(ids ...xid.ID) *RegistryUpdateOne {
 	ruo.mutation.RemoveRepositoryIDs(ids...)
 	return ruo
 }
 
 // RemoveRepositories removes "repositories" edges to Repository entities.
 func (ruo *RegistryUpdateOne) RemoveRepositories(r ...*Repository) *RegistryUpdateOne {
-	ids := make([]int, len(r))
+	ids := make([]xid.ID, len(r))
 	for i := range r {
 		ids[i] = r[i].ID
 	}
@@ -289,6 +299,12 @@ func (ruo *RegistryUpdateOne) check() error {
 	return nil
 }
 
+// Modify adds a statement modifier for attaching custom logic to the UPDATE statement.
+func (ruo *RegistryUpdateOne) Modify(modifiers ...func(u *sql.UpdateBuilder)) *RegistryUpdateOne {
+	ruo.modifiers = append(ruo.modifiers, modifiers...)
+	return ruo
+}
+
 func (ruo *RegistryUpdateOne) sqlSave(ctx context.Context) (_node *Registry, err error) {
 	if err := ruo.check(); err != nil {
 		return _node, err
@@ -329,7 +345,7 @@ func (ruo *RegistryUpdateOne) sqlSave(ctx context.Context) (_node *Registry, err
 			Columns: []string{registry.RepositoriesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeString),
 			},
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
@@ -342,7 +358,7 @@ func (ruo *RegistryUpdateOne) sqlSave(ctx context.Context) (_node *Registry, err
 			Columns: []string{registry.RepositoriesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -358,7 +374,7 @@ func (ruo *RegistryUpdateOne) sqlSave(ctx context.Context) (_node *Registry, err
 			Columns: []string{registry.RepositoriesColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeInt),
+				IDSpec: sqlgraph.NewFieldSpec(repository.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {
@@ -366,6 +382,7 @@ func (ruo *RegistryUpdateOne) sqlSave(ctx context.Context) (_node *Registry, err
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	_spec.AddModifiers(ruo.modifiers...)
 	_node = &Registry{config: ruo.config}
 	_spec.Assign = _node.assignValues
 	_spec.ScanValues = _node.scanValues

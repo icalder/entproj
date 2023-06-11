@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/icalder/enttest/ent/predicate"
-	"github.com/icalder/enttest/ent/registry"
+	"github.com/icalder/entproj/ent/predicate"
+	"github.com/icalder/entproj/ent/registry"
 )
 
 // RegistryDelete is the builder for deleting a Registry entity.

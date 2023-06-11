@@ -5,12 +5,12 @@ package enttest
 import (
 	"context"
 
-	"github.com/icalder/enttest/ent"
+	"github.com/icalder/entproj/ent"
 	// required by schema hooks.
-	_ "github.com/icalder/enttest/ent/runtime"
+	_ "github.com/icalder/entproj/ent/runtime"
 
 	"entgo.io/ent/dialect/sql/schema"
-	"github.com/icalder/enttest/ent/migrate"
+	"github.com/icalder/entproj/ent/migrate"
 )
 
 type (
