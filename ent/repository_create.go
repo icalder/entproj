@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/icalder/entproj/ent/artifact"
 	"github.com/icalder/entproj/ent/registry"
 	"github.com/icalder/entproj/ent/repository"
 	"github.com/rs/xid"
@@ -54,6 +55,21 @@ func (rc *RepositoryCreate) SetRegistryID(id uuid.UUID) *RepositoryCreate {
 // SetRegistry sets the "registry" edge to the Registry entity.
 func (rc *RepositoryCreate) SetRegistry(r *Registry) *RepositoryCreate {
 	return rc.SetRegistryID(r.ID)
+}
+
+// AddArtifactIDs adds the "artifacts" edge to the Artifact entity by IDs.
+func (rc *RepositoryCreate) AddArtifactIDs(ids ...xid.ID) *RepositoryCreate {
+	rc.mutation.AddArtifactIDs(ids...)
+	return rc
+}
+
+// AddArtifacts adds the "artifacts" edges to the Artifact entity.
+func (rc *RepositoryCreate) AddArtifacts(a ...*Artifact) *RepositoryCreate {
+	ids := make([]xid.ID, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return rc.AddArtifactIDs(ids...)
 }
 
 // Mutation returns the RepositoryMutation object of the builder.
@@ -165,6 +181,22 @@ func (rc *RepositoryCreate) createSpec() (*Repository, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.registry_repositories = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := rc.mutation.ArtifactsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   repository.ArtifactsTable,
+			Columns: []string{repository.ArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(artifact.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

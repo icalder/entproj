@@ -16,6 +16,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/icalder/entproj/ent/artifact"
 	"github.com/icalder/entproj/ent/registry"
 	"github.com/icalder/entproj/ent/repository"
 )
@@ -25,6 +26,8 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// Artifact is the client for interacting with the Artifact builders.
+	Artifact *ArtifactClient
 	// Registry is the client for interacting with the Registry builders.
 	Registry *RegistryClient
 	// Repository is the client for interacting with the Repository builders.
@@ -42,6 +45,7 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.Artifact = NewArtifactClient(c.config)
 	c.Registry = NewRegistryClient(c.config)
 	c.Repository = NewRepositoryClient(c.config)
 }
@@ -126,6 +130,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:        ctx,
 		config:     cfg,
+		Artifact:   NewArtifactClient(cfg),
 		Registry:   NewRegistryClient(cfg),
 		Repository: NewRepositoryClient(cfg),
 	}, nil
@@ -147,6 +152,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:        ctx,
 		config:     cfg,
+		Artifact:   NewArtifactClient(cfg),
 		Registry:   NewRegistryClient(cfg),
 		Repository: NewRepositoryClient(cfg),
 	}, nil
@@ -155,7 +161,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		Registry.
+//		Artifact.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -177,6 +183,7 @@ func (c *Client) Close() error {
 // Use adds the mutation hooks to all the entity clients.
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
+	c.Artifact.Use(hooks...)
 	c.Registry.Use(hooks...)
 	c.Repository.Use(hooks...)
 }
@@ -184,6 +191,7 @@ func (c *Client) Use(hooks ...Hook) {
 // Intercept adds the query interceptors to all the entity clients.
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
+	c.Artifact.Intercept(interceptors...)
 	c.Registry.Intercept(interceptors...)
 	c.Repository.Intercept(interceptors...)
 }
@@ -191,12 +199,180 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *ArtifactMutation:
+		return c.Artifact.mutate(ctx, m)
 	case *RegistryMutation:
 		return c.Registry.mutate(ctx, m)
 	case *RepositoryMutation:
 		return c.Repository.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// ArtifactClient is a client for the Artifact schema.
+type ArtifactClient struct {
+	config
+}
+
+// NewArtifactClient returns a client for the Artifact from the given config.
+func NewArtifactClient(c config) *ArtifactClient {
+	return &ArtifactClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `artifact.Hooks(f(g(h())))`.
+func (c *ArtifactClient) Use(hooks ...Hook) {
+	c.hooks.Artifact = append(c.hooks.Artifact, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `artifact.Intercept(f(g(h())))`.
+func (c *ArtifactClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Artifact = append(c.inters.Artifact, interceptors...)
+}
+
+// Create returns a builder for creating a Artifact entity.
+func (c *ArtifactClient) Create() *ArtifactCreate {
+	mutation := newArtifactMutation(c.config, OpCreate)
+	return &ArtifactCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Artifact entities.
+func (c *ArtifactClient) CreateBulk(builders ...*ArtifactCreate) *ArtifactCreateBulk {
+	return &ArtifactCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Artifact.
+func (c *ArtifactClient) Update() *ArtifactUpdate {
+	mutation := newArtifactMutation(c.config, OpUpdate)
+	return &ArtifactUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ArtifactClient) UpdateOne(a *Artifact) *ArtifactUpdateOne {
+	mutation := newArtifactMutation(c.config, OpUpdateOne, withArtifact(a))
+	return &ArtifactUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ArtifactClient) UpdateOneID(id xid.ID) *ArtifactUpdateOne {
+	mutation := newArtifactMutation(c.config, OpUpdateOne, withArtifactID(id))
+	return &ArtifactUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Artifact.
+func (c *ArtifactClient) Delete() *ArtifactDelete {
+	mutation := newArtifactMutation(c.config, OpDelete)
+	return &ArtifactDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ArtifactClient) DeleteOne(a *Artifact) *ArtifactDeleteOne {
+	return c.DeleteOneID(a.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ArtifactClient) DeleteOneID(id xid.ID) *ArtifactDeleteOne {
+	builder := c.Delete().Where(artifact.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ArtifactDeleteOne{builder}
+}
+
+// Query returns a query builder for Artifact.
+func (c *ArtifactClient) Query() *ArtifactQuery {
+	return &ArtifactQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeArtifact},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Artifact entity by its id.
+func (c *ArtifactClient) Get(ctx context.Context, id xid.ID) (*Artifact, error) {
+	return c.Query().Where(artifact.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ArtifactClient) GetX(ctx context.Context, id xid.ID) *Artifact {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryRepository queries the repository edge of a Artifact.
+func (c *ArtifactClient) QueryRepository(a *Artifact) *RepositoryQuery {
+	query := (&RepositoryClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(artifact.Table, artifact.FieldID, id),
+			sqlgraph.To(repository.Table, repository.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, artifact.RepositoryTable, artifact.RepositoryColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryParent queries the parent edge of a Artifact.
+func (c *ArtifactClient) QueryParent(a *Artifact) *ArtifactQuery {
+	query := (&ArtifactClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(artifact.Table, artifact.FieldID, id),
+			sqlgraph.To(artifact.Table, artifact.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, artifact.ParentTable, artifact.ParentColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryChildren queries the children edge of a Artifact.
+func (c *ArtifactClient) QueryChildren(a *Artifact) *ArtifactQuery {
+	query := (&ArtifactClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := a.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(artifact.Table, artifact.FieldID, id),
+			sqlgraph.To(artifact.Table, artifact.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, artifact.ChildrenTable, artifact.ChildrenColumn),
+		)
+		fromV = sqlgraph.Neighbors(a.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ArtifactClient) Hooks() []Hook {
+	return c.hooks.Artifact
+}
+
+// Interceptors returns the client interceptors.
+func (c *ArtifactClient) Interceptors() []Interceptor {
+	return c.inters.Artifact
+}
+
+func (c *ArtifactClient) mutate(ctx context.Context, m *ArtifactMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ArtifactCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ArtifactUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ArtifactUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ArtifactDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Artifact mutation op: %q", m.Op())
 	}
 }
 
@@ -443,6 +619,22 @@ func (c *RepositoryClient) QueryRegistry(r *Repository) *RegistryQuery {
 	return query
 }
 
+// QueryArtifacts queries the artifacts edge of a Repository.
+func (c *RepositoryClient) QueryArtifacts(r *Repository) *ArtifactQuery {
+	query := (&ArtifactClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := r.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(repository.Table, repository.FieldID, id),
+			sqlgraph.To(artifact.Table, artifact.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, repository.ArtifactsTable, repository.ArtifactsColumn),
+		)
+		fromV = sqlgraph.Neighbors(r.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *RepositoryClient) Hooks() []Hook {
 	return c.hooks.Repository
@@ -471,9 +663,9 @@ func (c *RepositoryClient) mutate(ctx context.Context, m *RepositoryMutation) (V
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Registry, Repository []ent.Hook
+		Artifact, Registry, Repository []ent.Hook
 	}
 	inters struct {
-		Registry, Repository []ent.Interceptor
+		Artifact, Registry, Repository []ent.Interceptor
 	}
 )

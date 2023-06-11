@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/icalder/entproj/ent/artifact"
 	"github.com/icalder/entproj/ent/predicate"
 	"github.com/icalder/entproj/ent/registry"
 	"github.com/icalder/entproj/ent/repository"
@@ -26,9 +28,919 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeArtifact   = "Artifact"
 	TypeRegistry   = "Registry"
 	TypeRepository = "Repository"
 )
+
+// ArtifactMutation represents an operation that mutates the Artifact nodes in the graph.
+type ArtifactMutation struct {
+	config
+	op                Op
+	typ               string
+	id                *xid.ID
+	digest            *string
+	mediaType         *string
+	tags              *[]string
+	appendtags        []string
+	artifactType      *string
+	lastPush          *time.Time
+	lastPull          *time.Time
+	clearedFields     map[string]struct{}
+	repository        *xid.ID
+	clearedrepository bool
+	parent            *xid.ID
+	clearedparent     bool
+	children          map[xid.ID]struct{}
+	removedchildren   map[xid.ID]struct{}
+	clearedchildren   bool
+	done              bool
+	oldValue          func(context.Context) (*Artifact, error)
+	predicates        []predicate.Artifact
+}
+
+var _ ent.Mutation = (*ArtifactMutation)(nil)
+
+// artifactOption allows management of the mutation configuration using functional options.
+type artifactOption func(*ArtifactMutation)
+
+// newArtifactMutation creates new mutation for the Artifact entity.
+func newArtifactMutation(c config, op Op, opts ...artifactOption) *ArtifactMutation {
+	m := &ArtifactMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeArtifact,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withArtifactID sets the ID field of the mutation.
+func withArtifactID(id xid.ID) artifactOption {
+	return func(m *ArtifactMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *Artifact
+		)
+		m.oldValue = func(ctx context.Context) (*Artifact, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().Artifact.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withArtifact sets the old Artifact of the mutation.
+func withArtifact(node *Artifact) artifactOption {
+	return func(m *ArtifactMutation) {
+		m.oldValue = func(context.Context) (*Artifact, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ArtifactMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ArtifactMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of Artifact entities.
+func (m *ArtifactMutation) SetID(id xid.ID) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ArtifactMutation) ID() (id xid.ID, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ArtifactMutation) IDs(ctx context.Context) ([]xid.ID, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []xid.ID{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().Artifact.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetDigest sets the "digest" field.
+func (m *ArtifactMutation) SetDigest(s string) {
+	m.digest = &s
+}
+
+// Digest returns the value of the "digest" field in the mutation.
+func (m *ArtifactMutation) Digest() (r string, exists bool) {
+	v := m.digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDigest returns the old "digest" field's value of the Artifact entity.
+// If the Artifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ArtifactMutation) OldDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDigest: %w", err)
+	}
+	return oldValue.Digest, nil
+}
+
+// ResetDigest resets all changes to the "digest" field.
+func (m *ArtifactMutation) ResetDigest() {
+	m.digest = nil
+}
+
+// SetMediaType sets the "mediaType" field.
+func (m *ArtifactMutation) SetMediaType(s string) {
+	m.mediaType = &s
+}
+
+// MediaType returns the value of the "mediaType" field in the mutation.
+func (m *ArtifactMutation) MediaType() (r string, exists bool) {
+	v := m.mediaType
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMediaType returns the old "mediaType" field's value of the Artifact entity.
+// If the Artifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ArtifactMutation) OldMediaType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMediaType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMediaType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMediaType: %w", err)
+	}
+	return oldValue.MediaType, nil
+}
+
+// ResetMediaType resets all changes to the "mediaType" field.
+func (m *ArtifactMutation) ResetMediaType() {
+	m.mediaType = nil
+}
+
+// SetTags sets the "tags" field.
+func (m *ArtifactMutation) SetTags(s []string) {
+	m.tags = &s
+	m.appendtags = nil
+}
+
+// Tags returns the value of the "tags" field in the mutation.
+func (m *ArtifactMutation) Tags() (r []string, exists bool) {
+	v := m.tags
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTags returns the old "tags" field's value of the Artifact entity.
+// If the Artifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ArtifactMutation) OldTags(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTags is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTags requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTags: %w", err)
+	}
+	return oldValue.Tags, nil
+}
+
+// AppendTags adds s to the "tags" field.
+func (m *ArtifactMutation) AppendTags(s []string) {
+	m.appendtags = append(m.appendtags, s...)
+}
+
+// AppendedTags returns the list of values that were appended to the "tags" field in this mutation.
+func (m *ArtifactMutation) AppendedTags() ([]string, bool) {
+	if len(m.appendtags) == 0 {
+		return nil, false
+	}
+	return m.appendtags, true
+}
+
+// ClearTags clears the value of the "tags" field.
+func (m *ArtifactMutation) ClearTags() {
+	m.tags = nil
+	m.appendtags = nil
+	m.clearedFields[artifact.FieldTags] = struct{}{}
+}
+
+// TagsCleared returns if the "tags" field was cleared in this mutation.
+func (m *ArtifactMutation) TagsCleared() bool {
+	_, ok := m.clearedFields[artifact.FieldTags]
+	return ok
+}
+
+// ResetTags resets all changes to the "tags" field.
+func (m *ArtifactMutation) ResetTags() {
+	m.tags = nil
+	m.appendtags = nil
+	delete(m.clearedFields, artifact.FieldTags)
+}
+
+// SetArtifactType sets the "artifactType" field.
+func (m *ArtifactMutation) SetArtifactType(s string) {
+	m.artifactType = &s
+}
+
+// ArtifactType returns the value of the "artifactType" field in the mutation.
+func (m *ArtifactMutation) ArtifactType() (r string, exists bool) {
+	v := m.artifactType
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldArtifactType returns the old "artifactType" field's value of the Artifact entity.
+// If the Artifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ArtifactMutation) OldArtifactType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldArtifactType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldArtifactType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldArtifactType: %w", err)
+	}
+	return oldValue.ArtifactType, nil
+}
+
+// ClearArtifactType clears the value of the "artifactType" field.
+func (m *ArtifactMutation) ClearArtifactType() {
+	m.artifactType = nil
+	m.clearedFields[artifact.FieldArtifactType] = struct{}{}
+}
+
+// ArtifactTypeCleared returns if the "artifactType" field was cleared in this mutation.
+func (m *ArtifactMutation) ArtifactTypeCleared() bool {
+	_, ok := m.clearedFields[artifact.FieldArtifactType]
+	return ok
+}
+
+// ResetArtifactType resets all changes to the "artifactType" field.
+func (m *ArtifactMutation) ResetArtifactType() {
+	m.artifactType = nil
+	delete(m.clearedFields, artifact.FieldArtifactType)
+}
+
+// SetLastPush sets the "lastPush" field.
+func (m *ArtifactMutation) SetLastPush(t time.Time) {
+	m.lastPush = &t
+}
+
+// LastPush returns the value of the "lastPush" field in the mutation.
+func (m *ArtifactMutation) LastPush() (r time.Time, exists bool) {
+	v := m.lastPush
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastPush returns the old "lastPush" field's value of the Artifact entity.
+// If the Artifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ArtifactMutation) OldLastPush(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastPush is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastPush requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastPush: %w", err)
+	}
+	return oldValue.LastPush, nil
+}
+
+// ClearLastPush clears the value of the "lastPush" field.
+func (m *ArtifactMutation) ClearLastPush() {
+	m.lastPush = nil
+	m.clearedFields[artifact.FieldLastPush] = struct{}{}
+}
+
+// LastPushCleared returns if the "lastPush" field was cleared in this mutation.
+func (m *ArtifactMutation) LastPushCleared() bool {
+	_, ok := m.clearedFields[artifact.FieldLastPush]
+	return ok
+}
+
+// ResetLastPush resets all changes to the "lastPush" field.
+func (m *ArtifactMutation) ResetLastPush() {
+	m.lastPush = nil
+	delete(m.clearedFields, artifact.FieldLastPush)
+}
+
+// SetLastPull sets the "lastPull" field.
+func (m *ArtifactMutation) SetLastPull(t time.Time) {
+	m.lastPull = &t
+}
+
+// LastPull returns the value of the "lastPull" field in the mutation.
+func (m *ArtifactMutation) LastPull() (r time.Time, exists bool) {
+	v := m.lastPull
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastPull returns the old "lastPull" field's value of the Artifact entity.
+// If the Artifact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ArtifactMutation) OldLastPull(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastPull is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastPull requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastPull: %w", err)
+	}
+	return oldValue.LastPull, nil
+}
+
+// ClearLastPull clears the value of the "lastPull" field.
+func (m *ArtifactMutation) ClearLastPull() {
+	m.lastPull = nil
+	m.clearedFields[artifact.FieldLastPull] = struct{}{}
+}
+
+// LastPullCleared returns if the "lastPull" field was cleared in this mutation.
+func (m *ArtifactMutation) LastPullCleared() bool {
+	_, ok := m.clearedFields[artifact.FieldLastPull]
+	return ok
+}
+
+// ResetLastPull resets all changes to the "lastPull" field.
+func (m *ArtifactMutation) ResetLastPull() {
+	m.lastPull = nil
+	delete(m.clearedFields, artifact.FieldLastPull)
+}
+
+// SetRepositoryID sets the "repository" edge to the Repository entity by id.
+func (m *ArtifactMutation) SetRepositoryID(id xid.ID) {
+	m.repository = &id
+}
+
+// ClearRepository clears the "repository" edge to the Repository entity.
+func (m *ArtifactMutation) ClearRepository() {
+	m.clearedrepository = true
+}
+
+// RepositoryCleared reports if the "repository" edge to the Repository entity was cleared.
+func (m *ArtifactMutation) RepositoryCleared() bool {
+	return m.clearedrepository
+}
+
+// RepositoryID returns the "repository" edge ID in the mutation.
+func (m *ArtifactMutation) RepositoryID() (id xid.ID, exists bool) {
+	if m.repository != nil {
+		return *m.repository, true
+	}
+	return
+}
+
+// RepositoryIDs returns the "repository" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// RepositoryID instead. It exists only for internal usage by the builders.
+func (m *ArtifactMutation) RepositoryIDs() (ids []xid.ID) {
+	if id := m.repository; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetRepository resets all changes to the "repository" edge.
+func (m *ArtifactMutation) ResetRepository() {
+	m.repository = nil
+	m.clearedrepository = false
+}
+
+// SetParentID sets the "parent" edge to the Artifact entity by id.
+func (m *ArtifactMutation) SetParentID(id xid.ID) {
+	m.parent = &id
+}
+
+// ClearParent clears the "parent" edge to the Artifact entity.
+func (m *ArtifactMutation) ClearParent() {
+	m.clearedparent = true
+}
+
+// ParentCleared reports if the "parent" edge to the Artifact entity was cleared.
+func (m *ArtifactMutation) ParentCleared() bool {
+	return m.clearedparent
+}
+
+// ParentID returns the "parent" edge ID in the mutation.
+func (m *ArtifactMutation) ParentID() (id xid.ID, exists bool) {
+	if m.parent != nil {
+		return *m.parent, true
+	}
+	return
+}
+
+// ParentIDs returns the "parent" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ParentID instead. It exists only for internal usage by the builders.
+func (m *ArtifactMutation) ParentIDs() (ids []xid.ID) {
+	if id := m.parent; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetParent resets all changes to the "parent" edge.
+func (m *ArtifactMutation) ResetParent() {
+	m.parent = nil
+	m.clearedparent = false
+}
+
+// AddChildIDs adds the "children" edge to the Artifact entity by ids.
+func (m *ArtifactMutation) AddChildIDs(ids ...xid.ID) {
+	if m.children == nil {
+		m.children = make(map[xid.ID]struct{})
+	}
+	for i := range ids {
+		m.children[ids[i]] = struct{}{}
+	}
+}
+
+// ClearChildren clears the "children" edge to the Artifact entity.
+func (m *ArtifactMutation) ClearChildren() {
+	m.clearedchildren = true
+}
+
+// ChildrenCleared reports if the "children" edge to the Artifact entity was cleared.
+func (m *ArtifactMutation) ChildrenCleared() bool {
+	return m.clearedchildren
+}
+
+// RemoveChildIDs removes the "children" edge to the Artifact entity by IDs.
+func (m *ArtifactMutation) RemoveChildIDs(ids ...xid.ID) {
+	if m.removedchildren == nil {
+		m.removedchildren = make(map[xid.ID]struct{})
+	}
+	for i := range ids {
+		delete(m.children, ids[i])
+		m.removedchildren[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedChildren returns the removed IDs of the "children" edge to the Artifact entity.
+func (m *ArtifactMutation) RemovedChildrenIDs() (ids []xid.ID) {
+	for id := range m.removedchildren {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ChildrenIDs returns the "children" edge IDs in the mutation.
+func (m *ArtifactMutation) ChildrenIDs() (ids []xid.ID) {
+	for id := range m.children {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetChildren resets all changes to the "children" edge.
+func (m *ArtifactMutation) ResetChildren() {
+	m.children = nil
+	m.clearedchildren = false
+	m.removedchildren = nil
+}
+
+// Where appends a list predicates to the ArtifactMutation builder.
+func (m *ArtifactMutation) Where(ps ...predicate.Artifact) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ArtifactMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ArtifactMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.Artifact, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ArtifactMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ArtifactMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (Artifact).
+func (m *ArtifactMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ArtifactMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.digest != nil {
+		fields = append(fields, artifact.FieldDigest)
+	}
+	if m.mediaType != nil {
+		fields = append(fields, artifact.FieldMediaType)
+	}
+	if m.tags != nil {
+		fields = append(fields, artifact.FieldTags)
+	}
+	if m.artifactType != nil {
+		fields = append(fields, artifact.FieldArtifactType)
+	}
+	if m.lastPush != nil {
+		fields = append(fields, artifact.FieldLastPush)
+	}
+	if m.lastPull != nil {
+		fields = append(fields, artifact.FieldLastPull)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ArtifactMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case artifact.FieldDigest:
+		return m.Digest()
+	case artifact.FieldMediaType:
+		return m.MediaType()
+	case artifact.FieldTags:
+		return m.Tags()
+	case artifact.FieldArtifactType:
+		return m.ArtifactType()
+	case artifact.FieldLastPush:
+		return m.LastPush()
+	case artifact.FieldLastPull:
+		return m.LastPull()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ArtifactMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case artifact.FieldDigest:
+		return m.OldDigest(ctx)
+	case artifact.FieldMediaType:
+		return m.OldMediaType(ctx)
+	case artifact.FieldTags:
+		return m.OldTags(ctx)
+	case artifact.FieldArtifactType:
+		return m.OldArtifactType(ctx)
+	case artifact.FieldLastPush:
+		return m.OldLastPush(ctx)
+	case artifact.FieldLastPull:
+		return m.OldLastPull(ctx)
+	}
+	return nil, fmt.Errorf("unknown Artifact field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ArtifactMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case artifact.FieldDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDigest(v)
+		return nil
+	case artifact.FieldMediaType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMediaType(v)
+		return nil
+	case artifact.FieldTags:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTags(v)
+		return nil
+	case artifact.FieldArtifactType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetArtifactType(v)
+		return nil
+	case artifact.FieldLastPush:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastPush(v)
+		return nil
+	case artifact.FieldLastPull:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastPull(v)
+		return nil
+	}
+	return fmt.Errorf("unknown Artifact field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ArtifactMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ArtifactMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ArtifactMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown Artifact numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ArtifactMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(artifact.FieldTags) {
+		fields = append(fields, artifact.FieldTags)
+	}
+	if m.FieldCleared(artifact.FieldArtifactType) {
+		fields = append(fields, artifact.FieldArtifactType)
+	}
+	if m.FieldCleared(artifact.FieldLastPush) {
+		fields = append(fields, artifact.FieldLastPush)
+	}
+	if m.FieldCleared(artifact.FieldLastPull) {
+		fields = append(fields, artifact.FieldLastPull)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ArtifactMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ArtifactMutation) ClearField(name string) error {
+	switch name {
+	case artifact.FieldTags:
+		m.ClearTags()
+		return nil
+	case artifact.FieldArtifactType:
+		m.ClearArtifactType()
+		return nil
+	case artifact.FieldLastPush:
+		m.ClearLastPush()
+		return nil
+	case artifact.FieldLastPull:
+		m.ClearLastPull()
+		return nil
+	}
+	return fmt.Errorf("unknown Artifact nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ArtifactMutation) ResetField(name string) error {
+	switch name {
+	case artifact.FieldDigest:
+		m.ResetDigest()
+		return nil
+	case artifact.FieldMediaType:
+		m.ResetMediaType()
+		return nil
+	case artifact.FieldTags:
+		m.ResetTags()
+		return nil
+	case artifact.FieldArtifactType:
+		m.ResetArtifactType()
+		return nil
+	case artifact.FieldLastPush:
+		m.ResetLastPush()
+		return nil
+	case artifact.FieldLastPull:
+		m.ResetLastPull()
+		return nil
+	}
+	return fmt.Errorf("unknown Artifact field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ArtifactMutation) AddedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.repository != nil {
+		edges = append(edges, artifact.EdgeRepository)
+	}
+	if m.parent != nil {
+		edges = append(edges, artifact.EdgeParent)
+	}
+	if m.children != nil {
+		edges = append(edges, artifact.EdgeChildren)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ArtifactMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case artifact.EdgeRepository:
+		if id := m.repository; id != nil {
+			return []ent.Value{*id}
+		}
+	case artifact.EdgeParent:
+		if id := m.parent; id != nil {
+			return []ent.Value{*id}
+		}
+	case artifact.EdgeChildren:
+		ids := make([]ent.Value, 0, len(m.children))
+		for id := range m.children {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ArtifactMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.removedchildren != nil {
+		edges = append(edges, artifact.EdgeChildren)
+	}
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ArtifactMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case artifact.EdgeChildren:
+		ids := make([]ent.Value, 0, len(m.removedchildren))
+		for id := range m.removedchildren {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ArtifactMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 3)
+	if m.clearedrepository {
+		edges = append(edges, artifact.EdgeRepository)
+	}
+	if m.clearedparent {
+		edges = append(edges, artifact.EdgeParent)
+	}
+	if m.clearedchildren {
+		edges = append(edges, artifact.EdgeChildren)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ArtifactMutation) EdgeCleared(name string) bool {
+	switch name {
+	case artifact.EdgeRepository:
+		return m.clearedrepository
+	case artifact.EdgeParent:
+		return m.clearedparent
+	case artifact.EdgeChildren:
+		return m.clearedchildren
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ArtifactMutation) ClearEdge(name string) error {
+	switch name {
+	case artifact.EdgeRepository:
+		m.ClearRepository()
+		return nil
+	case artifact.EdgeParent:
+		m.ClearParent()
+		return nil
+	}
+	return fmt.Errorf("unknown Artifact unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ArtifactMutation) ResetEdge(name string) error {
+	switch name {
+	case artifact.EdgeRepository:
+		m.ResetRepository()
+		return nil
+	case artifact.EdgeParent:
+		m.ResetParent()
+		return nil
+	case artifact.EdgeChildren:
+		m.ResetChildren()
+		return nil
+	}
+	return fmt.Errorf("unknown Artifact edge %s", name)
+}
 
 // RegistryMutation represents an operation that mutates the Registry nodes in the graph.
 type RegistryMutation struct {
@@ -458,16 +1370,19 @@ func (m *RegistryMutation) ResetEdge(name string) error {
 // RepositoryMutation represents an operation that mutates the Repository nodes in the graph.
 type RepositoryMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *xid.ID
-	name            *string
-	clearedFields   map[string]struct{}
-	registry        *uuid.UUID
-	clearedregistry bool
-	done            bool
-	oldValue        func(context.Context) (*Repository, error)
-	predicates      []predicate.Repository
+	op               Op
+	typ              string
+	id               *xid.ID
+	name             *string
+	clearedFields    map[string]struct{}
+	registry         *uuid.UUID
+	clearedregistry  bool
+	artifacts        map[xid.ID]struct{}
+	removedartifacts map[xid.ID]struct{}
+	clearedartifacts bool
+	done             bool
+	oldValue         func(context.Context) (*Repository, error)
+	predicates       []predicate.Repository
 }
 
 var _ ent.Mutation = (*RepositoryMutation)(nil)
@@ -649,6 +1564,60 @@ func (m *RepositoryMutation) ResetRegistry() {
 	m.clearedregistry = false
 }
 
+// AddArtifactIDs adds the "artifacts" edge to the Artifact entity by ids.
+func (m *RepositoryMutation) AddArtifactIDs(ids ...xid.ID) {
+	if m.artifacts == nil {
+		m.artifacts = make(map[xid.ID]struct{})
+	}
+	for i := range ids {
+		m.artifacts[ids[i]] = struct{}{}
+	}
+}
+
+// ClearArtifacts clears the "artifacts" edge to the Artifact entity.
+func (m *RepositoryMutation) ClearArtifacts() {
+	m.clearedartifacts = true
+}
+
+// ArtifactsCleared reports if the "artifacts" edge to the Artifact entity was cleared.
+func (m *RepositoryMutation) ArtifactsCleared() bool {
+	return m.clearedartifacts
+}
+
+// RemoveArtifactIDs removes the "artifacts" edge to the Artifact entity by IDs.
+func (m *RepositoryMutation) RemoveArtifactIDs(ids ...xid.ID) {
+	if m.removedartifacts == nil {
+		m.removedartifacts = make(map[xid.ID]struct{})
+	}
+	for i := range ids {
+		delete(m.artifacts, ids[i])
+		m.removedartifacts[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedArtifacts returns the removed IDs of the "artifacts" edge to the Artifact entity.
+func (m *RepositoryMutation) RemovedArtifactsIDs() (ids []xid.ID) {
+	for id := range m.removedartifacts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ArtifactsIDs returns the "artifacts" edge IDs in the mutation.
+func (m *RepositoryMutation) ArtifactsIDs() (ids []xid.ID) {
+	for id := range m.artifacts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetArtifacts resets all changes to the "artifacts" edge.
+func (m *RepositoryMutation) ResetArtifacts() {
+	m.artifacts = nil
+	m.clearedartifacts = false
+	m.removedartifacts = nil
+}
+
 // Where appends a list predicates to the RepositoryMutation builder.
 func (m *RepositoryMutation) Where(ps ...predicate.Repository) {
 	m.predicates = append(m.predicates, ps...)
@@ -782,9 +1751,12 @@ func (m *RepositoryMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *RepositoryMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.registry != nil {
 		edges = append(edges, repository.EdgeRegistry)
+	}
+	if m.artifacts != nil {
+		edges = append(edges, repository.EdgeArtifacts)
 	}
 	return edges
 }
@@ -797,27 +1769,47 @@ func (m *RepositoryMutation) AddedIDs(name string) []ent.Value {
 		if id := m.registry; id != nil {
 			return []ent.Value{*id}
 		}
+	case repository.EdgeArtifacts:
+		ids := make([]ent.Value, 0, len(m.artifacts))
+		for id := range m.artifacts {
+			ids = append(ids, id)
+		}
+		return ids
 	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *RepositoryMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
+	if m.removedartifacts != nil {
+		edges = append(edges, repository.EdgeArtifacts)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *RepositoryMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case repository.EdgeArtifacts:
+		ids := make([]ent.Value, 0, len(m.removedartifacts))
+		for id := range m.removedartifacts {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *RepositoryMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 2)
 	if m.clearedregistry {
 		edges = append(edges, repository.EdgeRegistry)
+	}
+	if m.clearedartifacts {
+		edges = append(edges, repository.EdgeArtifacts)
 	}
 	return edges
 }
@@ -828,6 +1820,8 @@ func (m *RepositoryMutation) EdgeCleared(name string) bool {
 	switch name {
 	case repository.EdgeRegistry:
 		return m.clearedregistry
+	case repository.EdgeArtifacts:
+		return m.clearedartifacts
 	}
 	return false
 }
@@ -849,6 +1843,9 @@ func (m *RepositoryMutation) ResetEdge(name string) error {
 	switch name {
 	case repository.EdgeRegistry:
 		m.ResetRegistry()
+		return nil
+	case repository.EdgeArtifacts:
+		m.ResetArtifacts()
 		return nil
 	}
 	return fmt.Errorf("unknown Repository edge %s", name)

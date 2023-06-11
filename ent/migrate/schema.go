@@ -8,6 +8,45 @@ import (
 )
 
 var (
+	// ArtifactsColumns holds the columns for the "artifacts" table.
+	ArtifactsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeString},
+		{Name: "digest", Type: field.TypeString, Size: 2147483647},
+		{Name: "media_type", Type: field.TypeString, Size: 2147483647},
+		{Name: "tags", Type: field.TypeJSON, Nullable: true},
+		{Name: "artifact_type", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "last_push", Type: field.TypeTime, Nullable: true},
+		{Name: "last_pull", Type: field.TypeTime, Nullable: true},
+		{Name: "artifact_children", Type: field.TypeString, Nullable: true},
+		{Name: "repository_artifacts", Type: field.TypeString},
+	}
+	// ArtifactsTable holds the schema information for the "artifacts" table.
+	ArtifactsTable = &schema.Table{
+		Name:       "artifacts",
+		Columns:    ArtifactsColumns,
+		PrimaryKey: []*schema.Column{ArtifactsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "artifacts_artifacts_children",
+				Columns:    []*schema.Column{ArtifactsColumns[7]},
+				RefColumns: []*schema.Column{ArtifactsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "artifacts_repositories_artifacts",
+				Columns:    []*schema.Column{ArtifactsColumns[8]},
+				RefColumns: []*schema.Column{RepositoriesColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "artifact_digest_repository_artifacts",
+				Unique:  true,
+				Columns: []*schema.Column{ArtifactsColumns[1], ArtifactsColumns[8]},
+			},
+		},
+	}
 	// RegistriesColumns holds the columns for the "registries" table.
 	RegistriesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeUUID},
@@ -48,11 +87,14 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		ArtifactsTable,
 		RegistriesTable,
 		RepositoriesTable,
 	}
 )
 
 func init() {
+	ArtifactsTable.ForeignKeys[0].RefTable = ArtifactsTable
+	ArtifactsTable.ForeignKeys[1].RefTable = RepositoriesTable
 	RepositoriesTable.ForeignKeys[0].RefTable = RegistriesTable
 }

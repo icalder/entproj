@@ -11,9 +11,11 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/icalder/entproj/ent/artifact"
 	"github.com/icalder/entproj/ent/predicate"
 	"github.com/icalder/entproj/ent/registry"
 	"github.com/icalder/entproj/ent/repository"
+	"github.com/rs/xid"
 )
 
 // RepositoryUpdate is the builder for updating Repository entities.
@@ -47,6 +49,21 @@ func (ru *RepositoryUpdate) SetRegistry(r *Registry) *RepositoryUpdate {
 	return ru.SetRegistryID(r.ID)
 }
 
+// AddArtifactIDs adds the "artifacts" edge to the Artifact entity by IDs.
+func (ru *RepositoryUpdate) AddArtifactIDs(ids ...xid.ID) *RepositoryUpdate {
+	ru.mutation.AddArtifactIDs(ids...)
+	return ru
+}
+
+// AddArtifacts adds the "artifacts" edges to the Artifact entity.
+func (ru *RepositoryUpdate) AddArtifacts(a ...*Artifact) *RepositoryUpdate {
+	ids := make([]xid.ID, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return ru.AddArtifactIDs(ids...)
+}
+
 // Mutation returns the RepositoryMutation object of the builder.
 func (ru *RepositoryUpdate) Mutation() *RepositoryMutation {
 	return ru.mutation
@@ -56,6 +73,27 @@ func (ru *RepositoryUpdate) Mutation() *RepositoryMutation {
 func (ru *RepositoryUpdate) ClearRegistry() *RepositoryUpdate {
 	ru.mutation.ClearRegistry()
 	return ru
+}
+
+// ClearArtifacts clears all "artifacts" edges to the Artifact entity.
+func (ru *RepositoryUpdate) ClearArtifacts() *RepositoryUpdate {
+	ru.mutation.ClearArtifacts()
+	return ru
+}
+
+// RemoveArtifactIDs removes the "artifacts" edge to Artifact entities by IDs.
+func (ru *RepositoryUpdate) RemoveArtifactIDs(ids ...xid.ID) *RepositoryUpdate {
+	ru.mutation.RemoveArtifactIDs(ids...)
+	return ru
+}
+
+// RemoveArtifacts removes "artifacts" edges to Artifact entities.
+func (ru *RepositoryUpdate) RemoveArtifacts(a ...*Artifact) *RepositoryUpdate {
+	ids := make([]xid.ID, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return ru.RemoveArtifactIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -148,6 +186,51 @@ func (ru *RepositoryUpdate) sqlSave(ctx context.Context) (n int, err error) {
 		}
 		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
+	if ru.mutation.ArtifactsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   repository.ArtifactsTable,
+			Columns: []string{repository.ArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(artifact.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ru.mutation.RemovedArtifactsIDs(); len(nodes) > 0 && !ru.mutation.ArtifactsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   repository.ArtifactsTable,
+			Columns: []string{repository.ArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(artifact.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ru.mutation.ArtifactsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   repository.ArtifactsTable,
+			Columns: []string{repository.ArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(artifact.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	_spec.AddModifiers(ru.modifiers...)
 	if n, err = sqlgraph.UpdateNodes(ctx, ru.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -187,6 +270,21 @@ func (ruo *RepositoryUpdateOne) SetRegistry(r *Registry) *RepositoryUpdateOne {
 	return ruo.SetRegistryID(r.ID)
 }
 
+// AddArtifactIDs adds the "artifacts" edge to the Artifact entity by IDs.
+func (ruo *RepositoryUpdateOne) AddArtifactIDs(ids ...xid.ID) *RepositoryUpdateOne {
+	ruo.mutation.AddArtifactIDs(ids...)
+	return ruo
+}
+
+// AddArtifacts adds the "artifacts" edges to the Artifact entity.
+func (ruo *RepositoryUpdateOne) AddArtifacts(a ...*Artifact) *RepositoryUpdateOne {
+	ids := make([]xid.ID, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return ruo.AddArtifactIDs(ids...)
+}
+
 // Mutation returns the RepositoryMutation object of the builder.
 func (ruo *RepositoryUpdateOne) Mutation() *RepositoryMutation {
 	return ruo.mutation
@@ -196,6 +294,27 @@ func (ruo *RepositoryUpdateOne) Mutation() *RepositoryMutation {
 func (ruo *RepositoryUpdateOne) ClearRegistry() *RepositoryUpdateOne {
 	ruo.mutation.ClearRegistry()
 	return ruo
+}
+
+// ClearArtifacts clears all "artifacts" edges to the Artifact entity.
+func (ruo *RepositoryUpdateOne) ClearArtifacts() *RepositoryUpdateOne {
+	ruo.mutation.ClearArtifacts()
+	return ruo
+}
+
+// RemoveArtifactIDs removes the "artifacts" edge to Artifact entities by IDs.
+func (ruo *RepositoryUpdateOne) RemoveArtifactIDs(ids ...xid.ID) *RepositoryUpdateOne {
+	ruo.mutation.RemoveArtifactIDs(ids...)
+	return ruo
+}
+
+// RemoveArtifacts removes "artifacts" edges to Artifact entities.
+func (ruo *RepositoryUpdateOne) RemoveArtifacts(a ...*Artifact) *RepositoryUpdateOne {
+	ids := make([]xid.ID, len(a))
+	for i := range a {
+		ids[i] = a[i].ID
+	}
+	return ruo.RemoveArtifactIDs(ids...)
 }
 
 // Where appends a list predicates to the RepositoryUpdate builder.
@@ -311,6 +430,51 @@ func (ruo *RepositoryUpdateOne) sqlSave(ctx context.Context) (_node *Repository,
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(registry.FieldID, field.TypeUUID),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if ruo.mutation.ArtifactsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   repository.ArtifactsTable,
+			Columns: []string{repository.ArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(artifact.FieldID, field.TypeString),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ruo.mutation.RemovedArtifactsIDs(); len(nodes) > 0 && !ruo.mutation.ArtifactsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   repository.ArtifactsTable,
+			Columns: []string{repository.ArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(artifact.FieldID, field.TypeString),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := ruo.mutation.ArtifactsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   repository.ArtifactsTable,
+			Columns: []string{repository.ArtifactsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(artifact.FieldID, field.TypeString),
 			},
 		}
 		for _, k := range nodes {

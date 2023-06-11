@@ -9,6 +9,18 @@ import (
 	"github.com/icalder/entproj/ent"
 )
 
+// The ArtifactFunc type is an adapter to allow the use of ordinary
+// function as Artifact mutator.
+type ArtifactFunc func(context.Context, *ent.ArtifactMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ArtifactFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ArtifactMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ArtifactMutation", m)
+}
+
 // The RegistryFunc type is an adapter to allow the use of ordinary
 // function as Registry mutator.
 type RegistryFunc func(context.Context, *ent.RegistryMutation) (ent.Value, error)

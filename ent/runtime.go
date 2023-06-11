@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"github.com/icalder/entproj/ent/artifact"
 	"github.com/icalder/entproj/ent/registry"
 	"github.com/icalder/entproj/ent/repository"
 	"github.com/icalder/entproj/ent/schema"
@@ -13,6 +14,23 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	artifactMixin := schema.Artifact{}.Mixin()
+	artifactMixinFields0 := artifactMixin[0].Fields()
+	_ = artifactMixinFields0
+	artifactFields := schema.Artifact{}.Fields()
+	_ = artifactFields
+	// artifactDescDigest is the schema descriptor for digest field.
+	artifactDescDigest := artifactFields[0].Descriptor()
+	// artifact.DigestValidator is a validator for the "digest" field. It is called by the builders before save.
+	artifact.DigestValidator = artifactDescDigest.Validators[0].(func(string) error)
+	// artifactDescMediaType is the schema descriptor for mediaType field.
+	artifactDescMediaType := artifactFields[1].Descriptor()
+	// artifact.MediaTypeValidator is a validator for the "mediaType" field. It is called by the builders before save.
+	artifact.MediaTypeValidator = artifactDescMediaType.Validators[0].(func(string) error)
+	// artifactDescID is the schema descriptor for id field.
+	artifactDescID := artifactMixinFields0[0].Descriptor()
+	// artifact.DefaultID holds the default value on creation for the id field.
+	artifact.DefaultID = artifactDescID.Default.(func() xid.ID)
 	registryFields := schema.Registry{}.Fields()
 	_ = registryFields
 	// registryDescName is the schema descriptor for name field.

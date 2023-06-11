@@ -70,7 +70,7 @@
     }
 
     
-    const entGraph = JSON.parse("{\"nodes\":[{\"id\":\"Registry\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},{\"id\":\"Repository\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}],\"edges\":[{\"from\":\"Registry\",\"to\":\"Repository\",\"label\":\"repositories\"}]}");
+    const entGraph = JSON.parse("{\"nodes\":[{\"id\":\"Artifact\",\"fields\":[{\"name\":\"digest\",\"type\":\"string\"},{\"name\":\"mediaType\",\"type\":\"string\"},{\"name\":\"tags\",\"type\":\"[]string\"},{\"name\":\"artifactType\",\"type\":\"string\"},{\"name\":\"lastPush\",\"type\":\"time.Time\"},{\"name\":\"lastPull\",\"type\":\"time.Time\"}]},{\"id\":\"Registry\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]},{\"id\":\"Repository\",\"fields\":[{\"name\":\"name\",\"type\":\"string\"}]}],\"edges\":[{\"from\":\"Artifact\",\"to\":\"Artifact\",\"label\":\"children\"},{\"from\":\"Registry\",\"to\":\"Repository\",\"label\":\"repositories\"},{\"from\":\"Repository\",\"to\":\"Artifact\",\"label\":\"artifacts\"}]}");
     const nodes = new vis.DataSet((entGraph.nodes || []).map(n =>
     ({
       id: n.id,

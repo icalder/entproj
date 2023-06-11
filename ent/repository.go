@@ -32,9 +32,11 @@ type Repository struct {
 type RepositoryEdges struct {
 	// Registry holds the value of the registry edge.
 	Registry *Registry `json:"registry,omitempty"`
+	// Artifacts holds the value of the artifacts edge.
+	Artifacts []*Artifact `json:"artifacts,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [2]bool
 }
 
 // RegistryOrErr returns the Registry value or an error if the edge
@@ -48,6 +50,15 @@ func (e RepositoryEdges) RegistryOrErr() (*Registry, error) {
 		return e.Registry, nil
 	}
 	return nil, &NotLoadedError{edge: "registry"}
+}
+
+// ArtifactsOrErr returns the Artifacts value or an error if the edge
+// was not loaded in eager-loading.
+func (e RepositoryEdges) ArtifactsOrErr() ([]*Artifact, error) {
+	if e.loadedTypes[1] {
+		return e.Artifacts, nil
+	}
+	return nil, &NotLoadedError{edge: "artifacts"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -111,6 +122,11 @@ func (r *Repository) Value(name string) (ent.Value, error) {
 // QueryRegistry queries the "registry" edge of the Repository entity.
 func (r *Repository) QueryRegistry() *RegistryQuery {
 	return NewRepositoryClient(r.config).QueryRegistry(r)
+}
+
+// QueryArtifacts queries the "artifacts" edge of the Repository entity.
+func (r *Repository) QueryArtifacts() *ArtifactQuery {
+	return NewRepositoryClient(r.config).QueryArtifacts(r)
 }
 
 // Update returns a builder for updating this Repository.

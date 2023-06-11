@@ -17,6 +17,8 @@ const (
 	FieldName = "name"
 	// EdgeRegistry holds the string denoting the registry edge name in mutations.
 	EdgeRegistry = "registry"
+	// EdgeArtifacts holds the string denoting the artifacts edge name in mutations.
+	EdgeArtifacts = "artifacts"
 	// Table holds the table name of the repository in the database.
 	Table = "repositories"
 	// RegistryTable is the table that holds the registry relation/edge.
@@ -26,6 +28,13 @@ const (
 	RegistryInverseTable = "registries"
 	// RegistryColumn is the table column denoting the registry relation/edge.
 	RegistryColumn = "registry_repositories"
+	// ArtifactsTable is the table that holds the artifacts relation/edge.
+	ArtifactsTable = "artifacts"
+	// ArtifactsInverseTable is the table name for the Artifact entity.
+	// It exists in this package in order to avoid circular dependency with the "artifact" package.
+	ArtifactsInverseTable = "artifacts"
+	// ArtifactsColumn is the table column denoting the artifacts relation/edge.
+	ArtifactsColumn = "repository_artifacts"
 )
 
 // Columns holds all SQL columns for repository fields.
@@ -81,10 +90,31 @@ func ByRegistryField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newRegistryStep(), sql.OrderByField(field, opts...))
 	}
 }
+
+// ByArtifactsCount orders the results by artifacts count.
+func ByArtifactsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newArtifactsStep(), opts...)
+	}
+}
+
+// ByArtifacts orders the results by artifacts terms.
+func ByArtifacts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newArtifactsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
 func newRegistryStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(RegistryInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, RegistryTable, RegistryColumn),
+	)
+}
+func newArtifactsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ArtifactsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ArtifactsTable, ArtifactsColumn),
 	)
 }

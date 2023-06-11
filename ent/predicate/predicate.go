@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// Artifact is the predicate function for artifact builders.
+type Artifact func(*sql.Selector)
+
 // Registry is the predicate function for registry builders.
 type Registry func(*sql.Selector)
 

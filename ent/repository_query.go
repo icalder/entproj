@@ -4,6 +4,7 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
 	"math"
 
@@ -12,6 +13,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/google/uuid"
+	"github.com/icalder/entproj/ent/artifact"
 	"github.com/icalder/entproj/ent/predicate"
 	"github.com/icalder/entproj/ent/registry"
 	"github.com/icalder/entproj/ent/repository"
@@ -21,13 +23,14 @@ import (
 // RepositoryQuery is the builder for querying Repository entities.
 type RepositoryQuery struct {
 	config
-	ctx          *QueryContext
-	order        []repository.OrderOption
-	inters       []Interceptor
-	predicates   []predicate.Repository
-	withRegistry *RegistryQuery
-	withFKs      bool
-	modifiers    []func(*sql.Selector)
+	ctx           *QueryContext
+	order         []repository.OrderOption
+	inters        []Interceptor
+	predicates    []predicate.Repository
+	withRegistry  *RegistryQuery
+	withArtifacts *ArtifactQuery
+	withFKs       bool
+	modifiers     []func(*sql.Selector)
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -79,6 +82,28 @@ func (rq *RepositoryQuery) QueryRegistry() *RegistryQuery {
 			sqlgraph.From(repository.Table, repository.FieldID, selector),
 			sqlgraph.To(registry.Table, registry.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, true, repository.RegistryTable, repository.RegistryColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(rq.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryArtifacts chains the current query on the "artifacts" edge.
+func (rq *RepositoryQuery) QueryArtifacts() *ArtifactQuery {
+	query := (&ArtifactClient{config: rq.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := rq.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := rq.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(repository.Table, repository.FieldID, selector),
+			sqlgraph.To(artifact.Table, artifact.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, repository.ArtifactsTable, repository.ArtifactsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(rq.driver.Dialect(), step)
 		return fromU, nil
@@ -273,12 +298,13 @@ func (rq *RepositoryQuery) Clone() *RepositoryQuery {
 		return nil
 	}
 	return &RepositoryQuery{
-		config:       rq.config,
-		ctx:          rq.ctx.Clone(),
-		order:        append([]repository.OrderOption{}, rq.order...),
-		inters:       append([]Interceptor{}, rq.inters...),
-		predicates:   append([]predicate.Repository{}, rq.predicates...),
-		withRegistry: rq.withRegistry.Clone(),
+		config:        rq.config,
+		ctx:           rq.ctx.Clone(),
+		order:         append([]repository.OrderOption{}, rq.order...),
+		inters:        append([]Interceptor{}, rq.inters...),
+		predicates:    append([]predicate.Repository{}, rq.predicates...),
+		withRegistry:  rq.withRegistry.Clone(),
+		withArtifacts: rq.withArtifacts.Clone(),
 		// clone intermediate query.
 		sql:  rq.sql.Clone(),
 		path: rq.path,
@@ -293,6 +319,17 @@ func (rq *RepositoryQuery) WithRegistry(opts ...func(*RegistryQuery)) *Repositor
 		opt(query)
 	}
 	rq.withRegistry = query
+	return rq
+}
+
+// WithArtifacts tells the query-builder to eager-load the nodes that are connected to
+// the "artifacts" edge. The optional arguments are used to configure the query builder of the edge.
+func (rq *RepositoryQuery) WithArtifacts(opts ...func(*ArtifactQuery)) *RepositoryQuery {
+	query := (&ArtifactClient{config: rq.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	rq.withArtifacts = query
 	return rq
 }
 
@@ -375,8 +412,9 @@ func (rq *RepositoryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*R
 		nodes       = []*Repository{}
 		withFKs     = rq.withFKs
 		_spec       = rq.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [2]bool{
 			rq.withRegistry != nil,
+			rq.withArtifacts != nil,
 		}
 	)
 	if rq.withRegistry != nil {
@@ -412,6 +450,13 @@ func (rq *RepositoryQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*R
 			return nil, err
 		}
 	}
+	if query := rq.withArtifacts; query != nil {
+		if err := rq.loadArtifacts(ctx, query, nodes,
+			func(n *Repository) { n.Edges.Artifacts = []*Artifact{} },
+			func(n *Repository, e *Artifact) { n.Edges.Artifacts = append(n.Edges.Artifacts, e) }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
 }
 
@@ -444,6 +489,37 @@ func (rq *RepositoryQuery) loadRegistry(ctx context.Context, query *RegistryQuer
 		for i := range nodes {
 			assign(nodes[i], n)
 		}
+	}
+	return nil
+}
+func (rq *RepositoryQuery) loadArtifacts(ctx context.Context, query *ArtifactQuery, nodes []*Repository, init func(*Repository), assign func(*Repository, *Artifact)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[xid.ID]*Repository)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	query.withFKs = true
+	query.Where(predicate.Artifact(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(repository.ArtifactsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.repository_artifacts
+		if fk == nil {
+			return fmt.Errorf(`foreign-key "repository_artifacts" is nil for node %v`, n.ID)
+		}
+		node, ok := nodeids[*fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "repository_artifacts" returned %v for node %v`, *fk, n.ID)
+		}
+		assign(node, n)
 	}
 	return nil
 }
